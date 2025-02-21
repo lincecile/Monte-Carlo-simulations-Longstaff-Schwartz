@@ -35,6 +35,8 @@ NPV = np.mean(payoffs) * np.exp(-r * T)
 
 print(f"Prix de l'option: {NPV}")
 
+exit()
+
 # Visualisation
 dates = np.linspace(0, T, n+1)
 
