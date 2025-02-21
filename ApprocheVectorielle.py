@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.stats as stats
 import matplotlib.pyplot as plt
+import pandas as pd
 
 np.random.seed(42)
 
@@ -17,12 +18,10 @@ q = 0           # dividende
 
 # Génération vectorielle des mouvements browniens
 uniform_samples = np.random.uniform(0, 1, (n, N))
-Z = stats.norm.ppf(uniform_samples)
-dW = np.sqrt(step) * Z
-
+Z = stats.norm.ppf(uniform_samples) * np.sqrt(step)
 # Construction du mouvement brownien
 W = np.zeros((n+1, N))
-W[1:, :] = np.cumsum(dW, axis=0)
+W[1:, :] = np.cumsum(Z, axis=0)
 
 # Calcul vectoriel des prix finaux
 S_T = S0 * np.exp((r - q - sigma**2/2) * T + sigma * W[-1, :])
