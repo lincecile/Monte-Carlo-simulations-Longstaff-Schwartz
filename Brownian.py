@@ -2,16 +2,14 @@ import numpy as np
 import scipy.stats as stats
 import random
 import pandas as pd
-from .Option import Option
-from .Market import Market
+#from Option import Option
 np.random.seed(42)
 
 class Brownian:
-    def __init__(self, scalaire, n , N, option : Option):
-        self.scalaire = scalaire
+    def __init__(self, n , N):
         self.n = n
         self.N = N
-        self.step = option.maturity / n
+        self.step = 1 / n
 
     def Scalaire(self):
         #W0 = 0 valeur initiale du mouvement Brownien standard
