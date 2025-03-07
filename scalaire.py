@@ -31,7 +31,7 @@ S_T = np.ones((1,N))
 # NPV chaque branche
 NPV = np.ones((1,N))
 
-K = 10
+K = 110
 sigma = 0.2
 r = 0.04
 q = 0

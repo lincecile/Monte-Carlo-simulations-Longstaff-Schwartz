@@ -29,28 +29,31 @@ class Option:
             float: La valeur actualisée du payoff moyen
         """
         # Extraction des paramètres du marché
-        S0 = market.price
+        #S0 = market.price
+        #r = market.r
+        #sigma = market.sigma
+        #q = sum(div["rate"] for div in market.dividends)  # Taux de dividende total
+        #T = self.maturity
+        #n = 10
+        #N = 100
         r = market.r
-        sigma = market.sigma
-        q = sum(div["rate"] for div in market.dividends)  # Taux de dividende total
         T = self.maturity
-        n = 10
-        N = 100
-       
+        S_T = market.Price(brownian, method=method)
 
         if method == 'vector':
             # Pour la méthode vectorielle
-            
-            payoffs = np.maximum(market.Price(brownian) - self.strike, 0)
-            print(market.Price(brownian))
+            payoffs = np.maximum(S_T - self.strike, 0)
+            #payoffs = np.maximum(market.Price(brownian) - self.strike, 0)
+            #print(market.Price(brownian))
             #print(payoffs)
         else:
             # Pour la méthode scalaire
-            payoffs = np.ones(N)
-            for i in range(0,N):
-                payoffs[i] = max(0,market.Price(brownian, "scalaire")[i] - self.strike)
-                print(market.Price(brownian, "scalaire"))
-                x = input()
+            payoffs = np.maximum(S_T - self.strike, 0)
+            #payoffs = np.ones(N)
+            #for i in range(0,N):
+                #payoffs[i] = max(0,market.Price(brownian, "scalaire")[i] - self.strike)
+                #print(market.Price(brownian, "scalaire"))
+                #x = input()
             #print(payoffs)
                 
             #S_T = S0 * np.exp((r - q - sigma**2/2) * T + sigma * brownian[-1])
