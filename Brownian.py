@@ -22,23 +22,26 @@ class Brownian:
         W = np.zeros(self.n+1) # matrice des valeurs du mouvement Brownien
         # NPV chaque branche
         for i in range(1,self.n+1): # n pas representés par les lignes de la matrice
-            #uniform_samples = np.random.uniform(0, 1)
             uniform_samples = self._generator.uniform(0, 1)
             W[i] = W[i-1]+stats.norm.ppf(uniform_samples) * np.sqrt(self.step)
-            
+        
+        # print(pd.DataFrame(W))
+        # x = input("Press Enter to continue...")
         return W
 
 
     def Vecteur(self):
-        #np.random.seed(42)
         # Génération vectorielle des mouvements browniens
-        #uniform_samples = np.random.uniform(0, 1, (self.n, self.N))
-        uniform_samples = self._generator.uniform(0, 1, (self.n, self.N)) 
+        uniform_samples = self._generator.uniform(0, 1, (self.N,self.n)) 
         Z = stats.norm.ppf(uniform_samples)
         dW = np.sqrt(self.step) * Z
 
         # Construction du mouvement brownien
-        W = np.zeros((self.n+1, self.N))
-        W[1:, :] = np.cumsum(dW, axis=0)
-        #W[1:, :] = np.cumsum(self.gaussian_increments, axis=0)
+        W = np.zeros((self.N, self.n+1))
+        W[:, 1:] = np.cumsum(dW, axis=1)
+        
+        self._generator : np.random.Generator = np.random.default_rng(self.seed)
+
         return W
+
+

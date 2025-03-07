@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from Brownian import Brownian
 import numpy as np
+import pandas as pd
 @dataclass
 class Market:
     sigma: float
@@ -26,24 +27,15 @@ class Market:
         sigma = self.sigma
         q = sum(div["rate"] for div in self.dividends)  # Taux de dividende total
         T = 1
-        #n = brownian.n
-        #N = brownian.N
-       
-
+        
         if method == 'vector':
             # Pour la méthode vectorielle
             W = brownian.Vecteur()
-            S_T = S0 * np.exp((r - q - sigma**2/2) * T + sigma * W[-1, :])
-            #S_T = S0 * np.exp((r - q - sigma**2/2) * T + sigma * brownian.Vecteur()[-1, :])
-        
-            
+            S_T = S0 * np.exp((r - q - sigma**2/2) * T + sigma * W[:, -1])
         else:
             # Pour la méthode scalaire
-            #S_T = np.ones(brownian.N)
             S_T = np.zeros(brownian.N)
             for i in range(brownian.N):
-                #print(brownian.Scalaire()[-1])
-                #print(S_T)
                 W = brownian.Scalaire() 
                 S_T[i] = S0*np.exp( (r - q - sigma**2 / 2)*T + sigma* W[-1])
         return S_T
