@@ -1,20 +1,18 @@
-# Initialisation du générateur de nombres aléatoires
-from numpy.random import default_rng, SeedSequence
-seq = SeedSequence()
-rng = default_rng(seq)
+from sklearn.linear_model import LinearRegression
+import numpy as np
 
-def gaussian(n_time, n_path, d=1, random_state:np.random.Generator = rng):
-            """
-            Génère un mouvement brownien avec une distribution gaussienne.
-            
-            Parameters:
-            - n_time : int : Nombre de pas de temps
-            - n_path : int : Nombre de trajectoires
-            - d : int : Dimension (par défaut 1)
-            - random_state : np.random.Generator (optionnel) : Générateur aléatoire
-            
-            Returns:
-            - np.ndarray : Tableau de nombres générés selon une loi normale
-            """
-            gauss = random_state.standard_normal((d, n_time, n_path))
-            return gauss
+class RegressionEstimator:
+    def __init__(self, X, Y, degree=2):
+        self.degree = degree
+        self.X_poly = self._transform_features(X)
+        self.model = LinearRegression()
+        self.model.fit(self.X_poly, Y)
+        self.coefficients = self.model.coef_
+        self.intercept = self.model.intercept_
+    
+    def _transform_features(self, X):
+        return np.column_stack([X**i for i in range(1, self.degree + 1)])
+    
+    def predict(self, X):
+        X_poly = self._transform_features(X)
+        return self.model.predict(X_poly)
