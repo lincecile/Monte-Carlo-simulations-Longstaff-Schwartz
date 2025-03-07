@@ -9,12 +9,12 @@ import time
 market = Market(
 sigma=0.2, 
 r=0.04, 
-dividends=[{"ex_div_date": dt.datetime(2025, 4, 21), "amount": 0, "rate": 0}], 
+dividends=[{"ex_div_date": dt.datetime(2024, 4, 21), "amount": 3, "rate": 0}], 
 price=100)
 
-option = Option(pricing_date=dt.datetime(2024, 1, 1), maturity_date=dt.datetime(2025, 1, 1), strike=110)
+option = Option(pricing_date=dt.datetime(2024, 1, 1), maturity_date=dt.datetime(2025, 1, 1), strike=110, call=True, american=False)
 
-brownian = Brownian(252, 25000, 42)
+brownian = Brownian(365, 1000, 42)
 
 start_time_vector = time.time()
 priceV = option.payoff(brownian, market, method='vector')
