@@ -13,6 +13,6 @@ class RegressionEstimator:
     def _transform_features(self, X):
         return np.column_stack([X**i for i in range(1, self.degree + 1)])
     
-    def predict(self, X):
+    def get_estimator(self, X):
         X_poly = self._transform_features(X)
         return self.model.predict(X_poly)

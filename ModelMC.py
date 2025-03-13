@@ -1,18 +1,24 @@
-from Market import Market
-from Brownian import Brownian
-from Option import Option
+from Classes_Both.module_marche import DonneeMarche
+from Classes_MonteCarlo_LSM.module_brownian import Brownian
+from Classes_Both.module_option import Option
 import datetime as dt
 import numpy as np
 import time
 
 ### TEST ###
-market = Market(
-sigma=0.2, 
-r=0.04, 
-dividends=[{"ex_div_date": dt.datetime(2024, 4, 21), "amount": 3, "rate": 0}], 
-price=100)
+market = DonneeMarche(date_debut= dt.datetime(2024, 1, 1),
+volatilite=0.2, 
+taux_interet=0.04, 
+taux_actualisation=0.04,
+# dividends=[{"ex_div_date": dt.datetime(2024, 4, 21), "amount": 3, "rate": 0}], 
+dividende_ex_date = dt.datetime(2024, 4, 21),
+dividende_montant = 0,
+dividende_rate=0,
+prix_spot=100)
 
-option = Option(pricing_date=dt.datetime(2024, 1, 1), maturity_date=dt.datetime(2025, 1, 1), strike=110, call=True, american=False)
+option = Option(date_pricing=dt.datetime(2024, 1, 1), 
+                maturite=dt.datetime(2025, 1, 1), 
+                prix_exercice=110, call=True, americaine=False)
 
 brownian = Brownian(365, 1000, 42)
 
