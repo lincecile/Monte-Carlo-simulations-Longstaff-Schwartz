@@ -14,11 +14,11 @@ taux_actualisation=0.06,
 dividende_ex_date = dt.datetime(2024, 4, 21),
 dividende_montant = 0,
 dividende_rate=0,
-prix_spot=1)
+prix_spot=1.00)
 
 option = Option(date_pricing=dt.datetime(2024, 1, 1), 
                 maturite=dt.datetime(2025, 1, 1), 
-                prix_exercice=1.1, call=False, americaine=True)
+                prix_exercice=1.10, call=False, americaine=True)
 
 brownian = Brownian(3, 8, 42)
 

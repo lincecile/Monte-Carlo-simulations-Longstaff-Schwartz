@@ -9,7 +9,7 @@ from Classes_Both.module_marche import DonneeMarche
 from Classes_MonteCarlo_LSM.module_brownian import Brownian
 from Classes_MonteCarlo_LSM.module_regression import RegressionEstimator
 import numpy as np
-
+import pandas as pd
 #%% Classes
 
 @dataclass
@@ -84,16 +84,11 @@ class Option :
 
         # Initialisation des cash flows
         CF_matrix = np.zeros_like(stock_price_paths)
-        if self.call:
-            CF_matrix[:, -1] = np.maximum(0, stock_price_paths[:, -1] - self.prix_exercice)
-        else:
-            CF_matrix[:, -1] = np.maximum(self.prix_exercice - stock_price_paths[:, -1], 0)
-        print(stock_price_paths)
-        print(CF_matrix)
-        
-        discount_factor = np.exp(-market.taux_interet)  # Facteur d'actualisation constant
-        
-        for t in range(brownian.n - 1, 0, -1):
+        print(pd.DataFrame(stock_price_paths))
+        print(pd.DataFrame(CF_matrix))
+        # x = input()
+                
+        for t in range(brownian.n , 0, -1):
             print()
             print('temps ',t)
             if self.call:
@@ -101,30 +96,34 @@ class Option :
             else:
                 intrinsic_value = np.maximum(self.prix_exercice - stock_price_paths[:,t], 0)
         
-            print(intrinsic_value)
-            
             in_the_money = intrinsic_value > 0
-            
-            print(in_the_money)
 
-            if np.any(in_the_money):  # Vérifie s'il y a des valeurs ITM
+            if np.any(in_the_money) and t != brownian.n:  # Vérifie s'il y a des valeurs ITM
+                print(pd.DataFrame(stock_price_paths))
                 X = stock_price_paths[in_the_money, t].reshape(-1, 1)
-                Y = CF_matrix[in_the_money, t + 1] * discount_factor
+                Y = CF_matrix[in_the_money, t+1]*np.exp(-market.taux_interet)
+
+                for i in range(t+2,brownian.n+1):
+                    Y = Y + CF_matrix[in_the_money, i] * np.exp(-market.taux_interet*(i-t))  
+                    
                 estimator = RegressionEstimator(X, Y, degree=2)
                 continuation_value = np.zeros_like(intrinsic_value)
                 continuation_value[in_the_money] = estimator.get_estimator(X)
             else:
                 continuation_value = np.zeros_like(intrinsic_value)
             
-            print(continuation_value)
-
             exercise = intrinsic_value > continuation_value
             CF_matrix[:, t] = np.where(exercise, intrinsic_value, 0)
-            CF_matrix[:, t + 1] *= ~exercise  # Annule les cash flows futurs si exercé
-            print(CF_matrix)
+            # CF_matrix[:, t] *= ~exercise  # Annule les cash flows futurs si exercé
+
+            for i in range(t+1,brownian.n+1):
+                CF_matrix[:, i] *= ~exercise
+            print(pd.DataFrame(CF_matrix))
+
+        # x = input()
 
         # Trouver la position du dernier cash flow non nul pour chaque trajectoire
-        last_nonzero_indices = (CF_matrix != 0).cumsum(axis=1).argmax(axis=1)
+        last_nonzero_indices = (CF_matrix > 1e-10).cumsum(axis=1).argmax(axis=1)
         print(last_nonzero_indices)
         # Extraire le dernier cash flow non nul
         last_CF = CF_matrix[np.arange(CF_matrix.shape[0]), last_nonzero_indices]
