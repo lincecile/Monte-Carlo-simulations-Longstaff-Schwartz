@@ -16,5 +16,5 @@ class DonneeMarche :
     taux_interet : float 
     taux_actualisation : float
     dividende_ex_date : dt.date
-    dividende_montant : float
+    dividende_montant : float = 0
     dividende_rate : float = 0

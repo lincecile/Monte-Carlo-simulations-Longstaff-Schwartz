@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from Classes_MonteCarlo_LSM.module_regression import RegressionEstimator
+from module_regression import RegressionEstimator
 
 def compute_cash_flows(stock_price_paths, K=1.1, r=0.06):
     np.random.seed(42)
@@ -38,7 +38,7 @@ def compute_cash_flows(stock_price_paths, K=1.1, r=0.06):
     # Actualiser en fonction du temps
     discounted_CF = last_CF * np.exp(-r * last_nonzero_indices)
 
-    return pd.DataFrame(discounted_CF, columns=["t1"])
+    return np.mean(discounted_CF)
 
 # Exemple d'utilisation
 test_stock_price_paths = np.array([
@@ -53,4 +53,4 @@ test_stock_price_paths = np.array([
 ])
 
 discounted_CF= compute_cash_flows(test_stock_price_paths)
-print(np.mean(discounted_CF))
+print(discounted_CF)

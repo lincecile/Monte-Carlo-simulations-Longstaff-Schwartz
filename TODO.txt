@@ -1,1 +1,3 @@
 # liste plusieurs dividends?
+
+self.maturity? option class
