@@ -66,16 +66,16 @@ class Option :
                     S_T[i,j] = S0*np.exp( (r - q - sigma**2 / 2)*T + sigma* W[j]) - self.get_dividend( market, brownian, 0, 1)
 
         ## Exemple
-        # S_T = np.array([
-        #     [1.00, 1.09, 1.08, 1.34],
-        #     [1.00, 1.16, 1.26, 1.54],
-        #     [1.00, 1.0, 1.07, 1.03],
-        #     [1.00, 0.93, 0.97, 0.92],
-        #     [1.00, 1.11, 1.56, 1.52],
-        #     [1.00, 0.76, 0.77, 0.90],
-        #     [1.00, 0.92, 0.84, 1.01],
-        #     [1.00, 0.88, 1.22, 1.34]
-        # ])
+        S_T = np.array([
+            [1.00, 1.09, 1.08, 1.34],
+            [1.00, 1.16, 1.26, 1.54],
+            [1.00, 1.22, 1.07, 1.03],
+            [1.00, 0.93, 0.97, 0.92],
+            [1.00, 1.11, 1.56, 1.52],
+            [1.00, 0.76, 0.77, 0.90],
+            [1.00, 0.92, 0.84, 1.01],
+            [1.00, 0.88, 1.22, 1.34]
+        ])
 
         return S_T
     
@@ -83,70 +83,49 @@ class Option :
         stock_price_paths = self.Price(market, brownian, method=method)
 
         # Initialisation des cash flows
-        CF_matrix = np.zeros_like(stock_price_paths)
+        CF_vect = np.zeros(len(stock_price_paths))
         print(pd.DataFrame(stock_price_paths))
-        # # print(pd.DataFrame(CF_matrix))
-        x = input()
-                
-        for t in range(brownian.n , 0, -1):
-            # print()
-            # print('temps ',t)
+        
+        for t in range(brownian.n , -1, -1):
+            print()
+            print('temps ',t)
             if self.call:
                 intrinsic_value = np.maximum(0, stock_price_paths[:, t] - self.prix_exercice)
             else:
-                intrinsic_value = np.maximum(self.prix_exercice - stock_price_paths[:,t], 0)
+                intrinsic_value = np.maximum(self.prix_exercice - stock_price_paths[:, t], 0)
         
             in_the_money = intrinsic_value > 0
-
+            print(CF_vect)
+            # print(intrinsic_value)
+            # print(in_the_money)
+            # x = input()
+            continuation_value = np.zeros_like(intrinsic_value)
             if np.any(in_the_money) and t != brownian.n:  # Vérifie s'il y a des valeurs ITM
                 #print(pd.DataFrame(stock_price_paths))
+                # print('in')
                 X = stock_price_paths[in_the_money, t].reshape(-1, 1)
-                
-                # for i in range(t+2,brownian.n+1):
-                #     X = X + stock_price_paths[in_the_money, i] * np.exp(-market.taux_interet*(i-t))  
-                
-                # for i in range(t+2,brownian.n+1):
-                #     Y = Y + CF_matrix[in_the_money, i] * np.exp(-market.taux_interet*(i-t))  
-
-                Y = CF_matrix[in_the_money, t+1] * np.exp(-market.taux_interet)
-
-                indices = np.arange(t+2, brownian.n+1)
-                if indices.size > 0:  # Vérification pour éviter l'erreur d'indexation
-                    facteurs_actualisation = np.exp(-market.taux_interet * (indices - t))
-                    Y += np.sum(CF_matrix[np.ix_(in_the_money, indices)] * facteurs_actualisation, axis=1)
-
-
+                Y = CF_vect[in_the_money] * np.exp(-market.taux_interet*brownian.step)
+                print(X)
+                print(Y)
                 estimator = RegressionEstimator(X, Y, degree=2)
-                continuation_value = np.zeros_like(intrinsic_value)
                 continuation_value[in_the_money] = estimator.get_estimator(X)
-            else:
-                continuation_value = np.zeros_like(intrinsic_value)
-            
-            # print(pd.DataFrame(CF_matrix[:, t]))
+                x = input()
+                # print(pd.DataFrame(continuation_value))
+             
             # x = input()
-            # print(t)
             exercise = intrinsic_value > continuation_value
-            CF_matrix[:, t] = np.where(exercise, intrinsic_value, 0)
-            # CF_matrix[:, t] *= ~exercise  # Annule les cash flows futurs si exercé
-            # print(pd.DataFrame(continuation_value))
+            print(sum(exercise))
             # print(pd.DataFrame(exercise))
-            # print(pd.DataFrame(CF_matrix[:, t]))
-            for i in range(t+1,brownian.n+1):
-                CF_matrix[:, i] *= ~exercise
-            # print(pd.DataFrame(CF_matrix))
+            CF_vect = np.where(exercise, intrinsic_value, CF_vect*np.exp(-market.taux_interet*brownian.step))
+            print(t,brownian.step)
+            
+            print(np.mean(CF_vect)*np.exp(-market.taux_interet*(brownian.step*t)))
+            x = input()
 
-            # x = input()
-
-        # Trouver la position du dernier cash flow non nul pour chaque trajectoire
-        last_nonzero_indices = (CF_matrix > 1e-10).cumsum(axis=1).argmax(axis=1)
-        # print(last_nonzero_indices)
-        # Extraire le dernier cash flow non nul
-        last_CF = CF_matrix[np.arange(CF_matrix.shape[0]), last_nonzero_indices]
-        # print(last_CF)
-        # Actualiser en fonction du temps
-        discounted_CF = last_CF * np.exp(-market.taux_interet * last_nonzero_indices)
-        # print(discounted_CF)
-        return np.mean(discounted_CF)
+        
+        # CF_vect = CF_vect*np.exp(-market.taux_interet*(brownian.step))
+        
+        return np.mean(CF_vect)
 
     def payoff_intrinseque_classique(self, brownian : Brownian, market: DonneeMarche, method : str = 'vector') -> float:
         """
