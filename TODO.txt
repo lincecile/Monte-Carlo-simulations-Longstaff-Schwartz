@@ -1,2 +1,4 @@
 # liste plusieurs dividends?
+
+self.maturity? option class
 modifier fonction div : div_rate ou div_montant ? 
