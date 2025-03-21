@@ -69,7 +69,7 @@ class Option :
         # S_T = np.array([
         #     [1.00, 1.09, 1.08, 1.34],
         #     [1.00, 1.16, 1.26, 1.54],
-        #     [1.00, 1.22, 1.07, 1.03],
+        #     [1.00, 1.0, 1.07, 1.03],
         #     [1.00, 0.93, 0.97, 0.92],
         #     [1.00, 1.11, 1.56, 1.52],
         #     [1.00, 0.76, 0.77, 0.90],
@@ -85,12 +85,12 @@ class Option :
         # Initialisation des cash flows
         CF_matrix = np.zeros_like(stock_price_paths)
         print(pd.DataFrame(stock_price_paths))
-        print(pd.DataFrame(CF_matrix))
-        # x = input()
+        # # print(pd.DataFrame(CF_matrix))
+        x = input()
                 
         for t in range(brownian.n , 0, -1):
-            print()
-            print('temps ',t)
+            # print()
+            # print('temps ',t)
             if self.call:
                 intrinsic_value = np.maximum(0, stock_price_paths[:, t] - self.prix_exercice)
             else:
@@ -99,38 +99,53 @@ class Option :
             in_the_money = intrinsic_value > 0
 
             if np.any(in_the_money) and t != brownian.n:  # Vérifie s'il y a des valeurs ITM
-                print(pd.DataFrame(stock_price_paths))
+                #print(pd.DataFrame(stock_price_paths))
                 X = stock_price_paths[in_the_money, t].reshape(-1, 1)
-                Y = CF_matrix[in_the_money, t+1]*np.exp(-market.taux_interet)
+                
+                # for i in range(t+2,brownian.n+1):
+                #     X = X + stock_price_paths[in_the_money, i] * np.exp(-market.taux_interet*(i-t))  
+                
+                # for i in range(t+2,brownian.n+1):
+                #     Y = Y + CF_matrix[in_the_money, i] * np.exp(-market.taux_interet*(i-t))  
 
-                for i in range(t+2,brownian.n+1):
-                    Y = Y + CF_matrix[in_the_money, i] * np.exp(-market.taux_interet*(i-t))  
-                    
+                Y = CF_matrix[in_the_money, t+1] * np.exp(-market.taux_interet)
+
+                indices = np.arange(t+2, brownian.n+1)
+                if indices.size > 0:  # Vérification pour éviter l'erreur d'indexation
+                    facteurs_actualisation = np.exp(-market.taux_interet * (indices - t))
+                    Y += np.sum(CF_matrix[np.ix_(in_the_money, indices)] * facteurs_actualisation, axis=1)
+
+
                 estimator = RegressionEstimator(X, Y, degree=2)
                 continuation_value = np.zeros_like(intrinsic_value)
                 continuation_value[in_the_money] = estimator.get_estimator(X)
             else:
                 continuation_value = np.zeros_like(intrinsic_value)
             
+            # print(pd.DataFrame(CF_matrix[:, t]))
+            # x = input()
+            # print(t)
             exercise = intrinsic_value > continuation_value
             CF_matrix[:, t] = np.where(exercise, intrinsic_value, 0)
             # CF_matrix[:, t] *= ~exercise  # Annule les cash flows futurs si exercé
-
+            # print(pd.DataFrame(continuation_value))
+            # print(pd.DataFrame(exercise))
+            # print(pd.DataFrame(CF_matrix[:, t]))
             for i in range(t+1,brownian.n+1):
                 CF_matrix[:, i] *= ~exercise
-            print(pd.DataFrame(CF_matrix))
+            # print(pd.DataFrame(CF_matrix))
 
-        # x = input()
+            # x = input()
 
         # Trouver la position du dernier cash flow non nul pour chaque trajectoire
         last_nonzero_indices = (CF_matrix > 1e-10).cumsum(axis=1).argmax(axis=1)
-        print(last_nonzero_indices)
+        # print(last_nonzero_indices)
         # Extraire le dernier cash flow non nul
         last_CF = CF_matrix[np.arange(CF_matrix.shape[0]), last_nonzero_indices]
-        print(last_CF)
+        # print(last_CF)
         # Actualiser en fonction du temps
         discounted_CF = last_CF * np.exp(-market.taux_interet * last_nonzero_indices)
-        print(discounted_CF)
+        # print(discounted_CF)
         return np.mean(discounted_CF)
 
     def payoff_intrinseque_classique(self, brownian : Brownian, market: DonneeMarche, method : str = 'vector') -> float:

@@ -14,13 +14,13 @@ taux_actualisation=0.06,
 dividende_ex_date = dt.datetime(2024, 4, 21),
 dividende_montant = 0,
 dividende_rate=0,
-prix_spot=1.00)
+prix_spot=100)
 
 option = Option(date_pricing=dt.datetime(2024, 1, 1), 
                 maturite=dt.datetime(2025, 1, 1), 
-                prix_exercice=1.10, call=False, americaine=True)
+                prix_exercice=110, call=False, americaine=True)
 
-brownian = Brownian(3, 8, 42)
+brownian = Brownian(10, 1000000, 24)
 
 start_time_vector = time.time()
 priceV2 = option.payoff_LSM(brownian, market, method='vector')
