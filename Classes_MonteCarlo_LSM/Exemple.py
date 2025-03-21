@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from Classes_MonteCarlo_LSM.module_regression import RegressionEstimator
+from module_regression import RegressionEstimator
 
 def compute_cash_flows(stock_price_paths, K=1.1, r=0.06):
     np.random.seed(42)

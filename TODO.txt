@@ -1,1 +1,2 @@
 # liste plusieurs dividends?
+modifier fonction div : div_rate ou div_montant ? 
