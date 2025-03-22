@@ -20,7 +20,7 @@ option = Option(date_pricing=dt.datetime(2024, 1, 1),
                 maturite=dt.datetime(2025, 1, 1), 
                 prix_exercice=110, call=False, americaine=True)
 
-brownian = Brownian(8, 1000000, 1)
+brownian = Brownian(10, 100000, 1)
 
 start_time_vector = time.time()
 priceV2 = option.payoff_LSM(brownian, market, method='vector')
