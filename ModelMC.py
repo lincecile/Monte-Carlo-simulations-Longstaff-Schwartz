@@ -8,19 +8,19 @@ import time
 ### TEST ###
 market = DonneeMarche(date_debut= dt.datetime(2024, 1, 1),
 volatilite=0.2, 
-taux_interet=0.06, 
-taux_actualisation=0.06,
+taux_interet=0.18, 
+taux_actualisation=0.18,
 # dividends=[{"ex_div_date": dt.datetime(2024, 4, 21), "amount": 3, "rate": 0}], 
 dividende_ex_date = dt.datetime(2024, 4, 21),
 dividende_montant = 0,
 dividende_rate=0,
-prix_spot=1.00)
+prix_spot=100)
 
 option = Option(date_pricing=dt.datetime(2024, 1, 1), 
                 maturite=dt.datetime(2025, 1, 1), 
-                prix_exercice=1.1, call=False, americaine=True)
+                prix_exercice=110, call=False, americaine=True)
 
-brownian = Brownian(3, 8, 1)
+brownian = Brownian(8, 1000000, 1)
 
 start_time_vector = time.time()
 priceV2 = option.payoff_LSM(brownian, market, method='vector')
