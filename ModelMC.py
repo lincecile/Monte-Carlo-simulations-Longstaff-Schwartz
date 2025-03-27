@@ -8,8 +8,8 @@ import time
 ### TEST ###
 market = DonneeMarche(date_debut= dt.datetime(2024, 1, 1),
 volatilite=0.2, 
-taux_interet=0.06, 
-taux_actualisation=0.06,
+taux_interet=0.18, 
+taux_actualisation=0.18,
 # dividends=[{"ex_div_date": dt.datetime(2024, 4, 21), "amount": 3, "rate": 0}], 
 dividende_ex_date = dt.datetime(2024, 4, 21),
 dividende_montant = 0,

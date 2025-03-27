@@ -130,10 +130,64 @@ class Option :
                 #print(np.mean(CF_vect)*np.exp(-market.taux_interet*(brownian.step*t)))
                 #x = input()
 
-            
-            # CF_vect = CF_vect*np.exp(-market.taux_interet*(brownian.step))
-            
+        
+        # CF_vect = CF_vect*np.exp(-market.taux_interet*(brownian.step))
+        
         return np.mean(CF_vect)
+    
+    def payoff_LSM2(self, brownian : Brownian, market: DonneeMarche, method='vector'):
+        stock_price_paths = self.Price(market, brownian, method=method)
+        stock_price_paths = np.array(stock_price_paths)
+        if self.call:
+            intrinsic_value_paths = np.maximum(0, stock_price_paths - self.prix_exercice)
+            print('in call')
+        else:
+            intrinsic_value_paths = np.maximum(0, self.prix_exercice - stock_price_paths)
+            print('in put')
+
+        # Initialisation des cash flows
+        CF_vect = intrinsic_value_paths[:,-1]
+        print(pd.DataFrame(stock_price_paths))
+        print(pd.DataFrame(intrinsic_value_paths))
+        
+        for t in range(brownian.n-1 , 0, -1):
+            print()
+            print('temps ',t)
+            stock_price_t = stock_price_paths[:, t]
+            intrinsic_value_t = intrinsic_value_paths[:,t]
+
+            in_the_money = intrinsic_value_t > 0
+            continuation_value = np.zeros_like(intrinsic_value_t)
+            print(in_the_money)
+                        
+            if np.any(in_the_money):# and t != brownian.n:  # Vérifie s'il y a des valeurs ITM
+                print('in')
+                X = stock_price_t[in_the_money]
+                print('X',X)
+                print('step',brownian.step)
+                print('t',t)
+                print('market.taux_interet',market.taux_interet,-market.taux_interet*brownian.step)
+                print('IV', CF_vect[in_the_money])
+                Y = CF_vect[in_the_money] * np.exp(-market.taux_interet*brownian.step)
+                print('Y',Y)
+                estimator = RegressionEstimator(X, Y, degree=2)
+                continuation_value[in_the_money] = estimator.get_estimator(X)
+                print(continuation_value)
+        
+            # x = input()
+            exercise = intrinsic_value_t > continuation_value
+            print('nb exercise', sum(exercise))
+            print(CF_vect*np.exp(-market.taux_interet*brownian.step))
+            # if sum(exercise) > brownian.N*20/100:
+            #     print(t)
+            #     x = input()
+            CF_vect = np.where(exercise, intrinsic_value_t, CF_vect*np.exp(-market.taux_interet*brownian.step))
+            print(CF_vect)
+        print('t=0')
+        print(np.mean(CF_vect*np.exp(-market.taux_interet*(brownian.step))))
+            # x = input()
+        
+        return np.mean(CF_vect)*np.exp(-market.taux_interet*(brownian.step))
 
     def payoff_intrinseque_classique(self, brownian : Brownian, market: DonneeMarche, method : str = 'vector') -> float:
         """

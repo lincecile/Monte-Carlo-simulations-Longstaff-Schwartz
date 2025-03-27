@@ -32,5 +32,7 @@ class RegressionEstimator:
     
     def get_estimator(self, X):
         X_poly = self._transform_features(X)
-        print(self.intercept, self.coefficients)
+        prediction = self.intercept + np.dot(X_poly, self.coefficients)
+        print('coeff regression', self.intercept, self.coefficients)
         return self.model.predict(X_poly)
+        # return prediction
