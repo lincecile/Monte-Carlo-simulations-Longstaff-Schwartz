@@ -107,7 +107,7 @@ class Option :
             if t < brownian.n - 1:
 
                 continuation_value = np.zeros_like(intrinsic_value)
-                if np.any(in_the_money) :#and t != brownian.n:  # Vérifie s'il y a des valeurs ITM
+                if np.sum(in_the_money) > 3:#np.any(in_the_money) and t != brownian.n:  # Vérifie s'il y a des valeurs ITM
                     #print(pd.DataFrame(stock_price_paths))
                     # print('in')
                     X = stock_price_paths[in_the_money, t].reshape(-1, 1)
@@ -117,12 +117,14 @@ class Option :
                     estimator = RegressionEstimator(X, Y, degree=2)
                     continuation_value[in_the_money] = estimator.get_estimator(X)
                     #x = input()
+                    continuation_value = np.maximum(0, continuation_value)
                     #print(pd.DataFrame(continuation_value))
                 
                 #x = input()
                 exercise = (intrinsic_value > continuation_value) & in_the_money
                 #print(sum(exercise))
                 #print(pd.DataFrame(exercise))
+                
                 CF_vect = np.where(exercise, intrinsic_value, CF_vect*np.exp(-market.taux_interet*brownian.step))
                 
                 #print(np.mean(CF_vect)*np.exp(-market.taux_interet*(brownian.step*t)))
