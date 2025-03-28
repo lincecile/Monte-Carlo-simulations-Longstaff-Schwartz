@@ -79,62 +79,195 @@ class Option :
 
         return S_T
     
+    # marche call euro et americain
     def payoff_LSM(self, brownian : Brownian, market: DonneeMarche, method='vector'):
         stock_price_paths = self.Price(market, brownian, method=method)
 
         # Initialisation des cash flows
         CF_vect = np.zeros(len(stock_price_paths))
-        #print(pd.DataFrame(stock_price_paths))
         if self.call:
             CF_vect = np.maximum(0, stock_price_paths[:, -1] - self.prix_exercice)
         else:
             CF_vect = np.maximum(self.prix_exercice - stock_price_paths[:, -1], 0)
         
-        
-        for t in range(brownian.n , -1, -1):
-            #print()
-            #print('temps ',t)
+        for t in range(brownian.n , 0, -1):
+
             if self.call:
                 intrinsic_value = np.maximum(0, stock_price_paths[:, t] - self.prix_exercice)
             else:
                 intrinsic_value = np.maximum(self.prix_exercice - stock_price_paths[:, t], 0)
         
             in_the_money = intrinsic_value > 0
-            #print(CF_vect)
-            #print(intrinsic_value)
-            #print(in_the_money)
-            #x = input()
+
             if t < brownian.n - 1:
 
                 continuation_value = np.zeros_like(intrinsic_value)
-                if np.sum(in_the_money) > 3:#np.any(in_the_money) and t != brownian.n:  # Vérifie s'il y a des valeurs ITM
-                    #print(pd.DataFrame(stock_price_paths))
-                    # print('in')
+                if np.sum(in_the_money) > 0:#np.any(in_the_money) and t != brownian.n:  # Vérifie s'il y a des valeurs ITM
+
                     X = stock_price_paths[in_the_money, t].reshape(-1, 1)
                     Y = CF_vect[in_the_money] * np.exp(-market.taux_interet*brownian.step)
-                    #print(X)
-                    #print(Y)
+
                     estimator = RegressionEstimator(X, Y, degree=2)
                     continuation_value[in_the_money] = estimator.get_estimator(X)
-                    #x = input()
-                    continuation_value = np.maximum(0, continuation_value)
-                    #print(pd.DataFrame(continuation_value))
-                
+
                 #x = input()
                 exercise = (intrinsic_value > continuation_value) & in_the_money
-                #print(sum(exercise))
-                #print(pd.DataFrame(exercise))
-                
-                CF_vect = np.where(exercise, intrinsic_value, CF_vect*np.exp(-market.taux_interet*brownian.step))
-                
-                #print(np.mean(CF_vect)*np.exp(-market.taux_interet*(brownian.step*t)))
-                #x = input()
 
-        
-        # CF_vect = CF_vect*np.exp(-market.taux_interet*(brownian.step))
+                CF_vect = np.where(exercise, intrinsic_value, CF_vect*np.exp(-market.taux_interet*brownian.step))
+    
+        CF_vect = CF_vect*np.exp(-market.taux_interet*brownian.step)
         
         return np.mean(CF_vect)
     
+    # marche call et put euro
+    def payoff_LSMBBB(self, brownian : Brownian, market: DonneeMarche, method='vector'):
+        stock_price_paths = self.Price(market, brownian, method=method)
+
+        # Initialisation des cash flows
+        CF_vect = np.zeros(len(stock_price_paths))
+
+        # Final payoff calculation based on option type
+        if self.call:
+            CF_vect = np.maximum(0, stock_price_paths[:, -1] - self.prix_exercice)
+        else:
+            CF_vect = np.maximum(self.prix_exercice - stock_price_paths[:, -1], 0)
+        
+        # Early exercise logic for American options
+        if self.americaine:
+            for t in range(brownian.n, 0, -1):
+                # Calculate intrinsic value at current time step
+                if self.call:
+                    intrinsic_value = np.maximum(0, stock_price_paths[:, t] - self.prix_exercice)
+                else:
+                    intrinsic_value = np.maximum(self.prix_exercice - stock_price_paths[:, t], 0)
+            
+                in_the_money = intrinsic_value > 0
+                
+                # if t < brownian.n - 1 and np.sum(in_the_money) > 0:
+                if t < brownian.n - 1:
+
+                    continuation_value = np.zeros_like(intrinsic_value)
+                    if np.sum(in_the_money) > 0:
+                        # Regression to estimate continuation value
+                        X = stock_price_paths[in_the_money, t].reshape(-1, 1)
+                        Y = CF_vect[in_the_money] * np.exp(-market.taux_interet * brownian.step)
+                        
+                        estimator = RegressionEstimator(X, Y, degree=2)
+                        # continuation_value = np.zeros_like(intrinsic_value)
+                        continuation_value[in_the_money] = estimator.get_estimator(X)
+                    
+                    # Decide whether to exercise early
+                    exercise = (intrinsic_value > continuation_value) & in_the_money
+                    CF_vect = np.where(exercise, intrinsic_value, CF_vect * np.exp(-market.taux_interet * brownian.step))
+            # CF_vect = CF_vect*np.exp(-market.taux_interet*brownian.step)
+        
+        # Discounting the final cash flows
+        return np.mean(CF_vect * np.exp(-market.taux_interet * self.maturity))
+    
+
+    # call US ok 1cts d'ecart
+    # call euro ok
+    # put euro ok
+
+    def payoff_LSM3(self, brownian : Brownian, market: DonneeMarche, method='vector'):
+        # Générer les trajectoires des prix
+        stock_price_paths = self.Price(market, brownian, method=method)
+
+        # Calcul du payoff final
+        if self.call:
+            final_payoff = np.maximum(0, stock_price_paths[:, -1] - self.prix_exercice)
+        else:
+            final_payoff = np.maximum(self.prix_exercice - stock_price_paths[:, -1], 0)
+        
+        # Pour les options européennes, retourner simplement le payoff actualisé
+        if not self.americaine:
+            return np.mean(final_payoff * np.exp(-market.taux_interet * self.maturity))
+        
+        # Pour les options américaines
+        CF_vect = final_payoff.copy()
+        
+        # Parcourir les étapes à l'envers
+        for t in range(brownian.n - 1, 0, -1):
+            # Calculer la valeur intrinsèque à l'étape courante
+            if self.call:
+                intrinsic_value = np.maximum(0, stock_price_paths[:, t] - self.prix_exercice)
+            else:
+                intrinsic_value = np.maximum(self.prix_exercice - stock_price_paths[:, t], 0)
+            
+            # Sélectionner uniquement les chemins intéressants
+            in_the_money = intrinsic_value > 0
+            
+            if np.sum(in_the_money) > 0:
+                # Préparer les données pour la régression
+                X = stock_price_paths[in_the_money, t].reshape(-1, 1)
+                Y = CF_vect[in_the_money] * np.exp(-market.taux_interet * brownian.step)
+                
+                # Estimer la valeur de continuation
+                estimator = RegressionEstimator(X, Y, degree=2)
+                continuation_value = np.zeros_like(intrinsic_value)
+                continuation_value[in_the_money] = estimator.get_estimator(X)
+                
+                # Décider de l'exercice anticipé
+                exercise = (intrinsic_value > continuation_value) & in_the_money
+                
+                # Mettre à jour les cash-flows
+                CF_vect[exercise] = intrinsic_value[exercise]
+            
+            # Actualiser tous les cash-flows
+            CF_vect *= np.exp(-market.taux_interet * brownian.step)
+        
+        return np.mean(CF_vect)
+
+
+    def payoff_LSM4(self, brownian: Brownian, market: DonneeMarche, method='vector'):
+    
+        stock_price_paths = self.Price(market, brownian, method=method)
+
+        # Calcul du payoff final
+        if self.call:
+            final_payoff = np.maximum(0, stock_price_paths[:, -1] - self.prix_exercice)
+        else:
+            final_payoff = np.maximum(self.prix_exercice - stock_price_paths[:, -1], 0)
+        
+        # Pour les options européennes, retourner simplement le payoff actualisé
+        if not self.americaine:
+            return np.mean(final_payoff * np.exp(-market.taux_interet * self.maturity))
+        
+        # Pour les options américaines
+        CF_vect = final_payoff.copy()
+        
+        # Parcourir les étapes à l'envers
+        for t in range(brownian.n - 1, 0, -1):
+            # Calculer la valeur intrinsèque à l'étape courante
+            if self.call:
+                intrinsic_value = np.maximum(0, stock_price_paths[:, t] - self.prix_exercice)
+            else:
+                intrinsic_value = np.maximum(self.prix_exercice - stock_price_paths[:, t], 0)
+            
+            # Sélectionner uniquement les chemins intéressants
+            in_the_money = intrinsic_value > 0
+            
+            if np.sum(in_the_money) > 0:
+                # Préparer les données pour la régression
+                X = stock_price_paths[in_the_money, t].reshape(-1, 1)
+                Y = CF_vect[in_the_money] * np.exp(-market.taux_interet * brownian.step)
+                
+                # Estimer la valeur de continuation
+                estimator = RegressionEstimator(X, Y, degree=2)
+                continuation_value = np.zeros_like(intrinsic_value)
+                continuation_value[in_the_money] = estimator.get_estimator(X)
+                
+                # Décider de l'exercice anticipé
+                exercise = (intrinsic_value > continuation_value) & in_the_money
+                
+                # Mettre à jour les cash-flows
+                CF_vect[exercise] = intrinsic_value[exercise]
+            
+            # Actualiser tous les cash-flows
+            CF_vect *= np.exp(-market.taux_interet * brownian.step)
+        
+        return np.mean(CF_vect)
+
     def payoff_LSM2(self, brownian : Brownian, market: DonneeMarche, method='vector'):
         stock_price_paths = self.Price(market, brownian, method=method)
         stock_price_paths = np.array(stock_price_paths)

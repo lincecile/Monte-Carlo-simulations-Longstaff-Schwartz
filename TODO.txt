@@ -2,3 +2,7 @@
 
 self.maturity? option class
 modifier fonction div : div_rate ou div_montant ? 
+tirage antitetique
+prix 
+derivé
+si on change la seed on doit trouvé l'ecart type des prix des options

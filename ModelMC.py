@@ -8,8 +8,8 @@ import time
 ### TEST ###
 market = DonneeMarche(date_debut= dt.datetime(2024, 1, 1),
 volatilite=0.2, 
-taux_interet=0.18, 
-taux_actualisation=0.18,
+taux_interet=0.06, 
+taux_actualisation=0.06,
 # dividends=[{"ex_div_date": dt.datetime(2024, 4, 21), "amount": 3, "rate": 0}], 
 dividende_ex_date = dt.datetime(2024, 4, 21),
 dividende_montant = 0,
@@ -20,18 +20,22 @@ option = Option(date_pricing=dt.datetime(2024, 1, 1),
                 maturite=dt.datetime(2025, 1, 1), 
                 prix_exercice=110, call=False, americaine=True)
 
-brownian = Brownian(10, 100000, 1)
-
+brownian = Brownian(10, 1000000, 1)
+# avec 5 step europeen marche pas
 start_time_vector = time.time()
 priceV2 = option.payoff_LSM(brownian, market, method='vector')
+priceV3 = option.payoff_LSMBBB(brownian, market, method='vector')
+priceV4 = option.payoff_LSM3(brownian, market, method='vector')
+priceV5 = option.payoff_LSM4(brownian, market, method='vector')
 
 end_time_vector = time.time()
 vector_time = end_time_vector - start_time_vector
 print("Temps exe méthode vectorielle : ",vector_time)
-print("Prix Vecteur : ", priceV2)
+print("Prix Vecteur : ", priceV2, priceV3, priceV4,priceV5)
 
 
 exit()
+brownian = Brownian(10, 1000000, 1)
 start_time_vector = time.time()
 priceV = option.payoff_intrinseque_classique(brownian, market, method='vector')
 end_time_vector = time.time()
@@ -40,6 +44,7 @@ print("Temps exe méthode vectorielle : ",vector_time)
 print("Prix Vecteur : ", priceV)
 exit()
 
+brownian = Brownian(10, 1000000, 1)
 start_time_scalar = time.time()
 priceS = option.payoff_intrinseque_classique(brownian, market, method='scalaire')
 end_time_scalar = time.time()

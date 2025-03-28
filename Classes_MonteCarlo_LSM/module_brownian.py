@@ -29,7 +29,7 @@ class Brownian:
         W = np.zeros((self.N, self.n+1))
         W[:, 1:] = np.cumsum(dW, axis=1)
         
-        self._generator = np.random.default_rng(self.seed)
+        # self._generator = np.random.default_rng(self.seed)
 
         return W
 
