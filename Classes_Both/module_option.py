@@ -215,8 +215,14 @@ class Option :
             
             # Actualiser tous les cash-flows
             CF_vect *= np.exp(-market.taux_interet * brownian.step)
-        
-        return np.mean(CF_vect)
+
+        prix = np.mean(CF_vect)
+        std_prix = np.std(CF_vect) / np.sqrt(len(CF_vect))
+        print("Nb chemins :",len(CF_vect))
+        print("Prix min :",prix - 2*std_prix)
+        print("Prix max :",prix + 2*std_prix)
+
+        return (prix, std_prix)
 
 
     def payoff_LSM4(self, brownian: Brownian, market: DonneeMarche, method='vector'):
