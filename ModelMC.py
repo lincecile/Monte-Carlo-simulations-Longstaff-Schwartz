@@ -11,8 +11,8 @@ end_date = dt.datetime(2026, 1, 1)
 
 market = DonneeMarche(date_debut= start_date,
 volatilite=0.2, 
-taux_interet=0.06, 
-taux_actualisation=0.06,
+taux_interet=0.15, 
+taux_actualisation=0.15,
 # dividends=[{"ex_div_date": dt.datetime(2024, 4, 21), "amount": 3, "rate": 0}], 
 dividende_ex_date = dt.datetime(2024, 4, 21),
 dividende_montant = 0,
@@ -29,10 +29,10 @@ brownian = Brownian(period, 10, 1000000, 1)
 start_time_vector = time.time()
 #priceV2 = option.payoff_LSM(brownian, market, method='vector')
 #priceV3 = option.payoff_LSMBBB(brownian, market, method='vector')
-priceV4 = option.LSM(brownian, market, method='vector',antithetic=True)
+priceV4 = option.LSM(brownian, market, method='vector',antithetic=False)
 
 # brownian = Brownian(period, 10, 1000000, 1)
-# priceV5 = option.LSM(brownian, market, method='vector')
+# priceV5 = option.LSM2(brownian, market, method='vector')
 
 end_time_vector = time.time()
 vector_time = end_time_vector - start_time_vector
@@ -49,7 +49,6 @@ end_time_vector = time.time()
 vector_time = end_time_vector - start_time_vector
 print("Temps exe méthode vectorielle : ",vector_time)
 print("Prix Vecteur : ", priceV)
-exit()
 
 brownian = Brownian(10, 1000000, 1)
 start_time_scalar = time.time()

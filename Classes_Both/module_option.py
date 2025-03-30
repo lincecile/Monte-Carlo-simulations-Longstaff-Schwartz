@@ -56,7 +56,9 @@ class Option :
             W, timedelta = brownian.Vecteur()
             S_T = S0 * np.exp((taux_interet - q - sigma**2/2) * timedelta + sigma * W) - self.get_dividend(market, brownian, 0, 1)
             S_T[:,0] = S0
+            print(S_T)
             if antithetic:
+                print('in antithetic')
                 W_neg = -W
                 S_T_pos = S0 * np.exp((taux_interet - q - sigma**2/2) * timedelta + sigma * W) - self.get_dividend(market, brownian, 0, 1)
                 S_T_neg = S0 * np.exp((taux_interet - q - sigma**2/2) * timedelta + sigma * W_neg) - self.get_dividend(market, brownian, 0, 1)
@@ -218,8 +220,6 @@ class Option :
     def LSM(self, brownian: Brownian, market: DonneeMarche, poly_degree=2, poly_type="standard", method='vector', antithetic : bool=False):
 
         # Prix du sous-jacent simulé
-        Spot_simule = self.Price(market, brownian, method=method)
-
         if antithetic:
             stock_price_paths_pos, stock_price_paths_neg = self.Price(market, brownian, method=method, antithetic=antithetic)
             Spot_simule = np.concatenate([stock_price_paths_pos, stock_price_paths_neg], axis=0)
@@ -234,7 +234,6 @@ class Option :
         
         # Valeur de l'option européenne
         if not self.americaine:
-            # return np.mean(val_intriseque[:,-1] * np.exp(-market.taux_interet * self.maturity))
             prix = np.mean(val_intriseque[:,-1] * np.exp(-market.taux_interet * self.maturity))
             std_prix = np.std(val_intriseque[:,-1] * np.exp(-market.taux_interet * self.maturity)) / np.sqrt(len(val_intriseque[:,-1]))
             print("Nb chemins :",len(val_intriseque[:,-1]))
@@ -245,20 +244,19 @@ class Option :
         # Matrice des cash flows
         CF = np.zeros_like(Spot_simule)
         CF[:, -1] = val_intriseque[:, -1]  # Cash flows à la maturité, valeur intrinsèque
-        # print(pd.DataFrame(val_intriseque))
-        # x = input()
+        
         # Algo LSM
         for t in range(brownian.nb_step - 1, -1, -1): 
             
             # CF en t1 actualisé
             discounted_CF_next = CF[:, t+1] * np.exp(-market.taux_interet * self.maturity / brownian.nb_step)
-            print("discounted_CF_next",discounted_CF_next, CF[:, t+1])
-            # x = input()
+
             # Chemins dans la monnaie en t            
             in_the_money = val_intriseque[:, t] > 0
             
             # CF en t1 actualisé en t par défaut
             CF[:, t] = discounted_CF_next
+
             # Si des chemins sont dans la monnaie en t, on fait la regression
             if np.any(in_the_money):  
                 
@@ -282,6 +280,7 @@ class Option :
             print("Nb chemins :",len(CF0))
             print("Prix min non antithetic:",prix - 2*std_prix)
             print("Prix max non antithetic:",prix + 2*std_prix)
+            return (prix, std_prix)
         
         moitie = len(CF0) // 2
         CF_vect_final = (CF0[:moitie] + CF0[moitie:]) / 2
@@ -290,69 +289,5 @@ class Option :
         print("Nb chemins :",len(CF0))
         print("Prix min antithetic:",prix - 2*std_prix)
         print("Prix max antithetic:",prix + 2*std_prix)
-
-        return (prix, std_prix)
-
-    def LSM2(self, brownian: Brownian, market: DonneeMarche, poly_degree=2, poly_type="standard", method='vector'):
-        # Prix du sous-jacent simulé
-        Spot_simule = self.Price(market, brownian, method=method)
-        
-        # Calcul valeur intrinsèque à chaque pas de temps
-        if self.call:
-            val_intriseque = np.maximum(Spot_simule[:,-1] - self.prix_exercice, 0.0)
-        else:
-            val_intriseque = np.maximum(self.prix_exercice - Spot_simule[:,-1], 0.0)
-        
-        # Valeur de l'option européenne
-        if not self.americaine:
-            return np.mean(val_intriseque * np.exp(-market.taux_interet * self.maturity))
-        
-        # Matrice des cash flows
-        CF = np.zeros_like(Spot_simule)
-        CF[:, -1] = val_intriseque  # Cash flows à la maturité, valeur intrinsèque
-        CF_Vect = val_intriseque.copy()
-
-        # Algo LSM
-        for t in range(brownian.nb_step - 1, -1, -1): 
-
-            if self.call:
-                print('innnn')
-                val_intriseque = np.maximum(Spot_simule[:,t] - self.prix_exercice, 0.0)
-                val_intriseque1 = np.maximum(Spot_simule[:,t+1] - self.prix_exercice, 0.0)
-                print('val_intriseque1',val_intriseque1)
-            else:
-                val_intriseque = np.maximum(self.prix_exercice - Spot_simule[:,t], 0.0)
-                val_intriseque1 = np.maximum(self.prix_exercice - Spot_simule[:,t+1], 0.0)
-            
-            # CF en t1 actualisé
-            discounted_CF_next = val_intriseque1 * np.exp(-market.taux_interet * self.maturity / brownian.nb_step)
-            print("val_intriseque1",val_intriseque1)
-            x = input()
-            # Chemins dans la monnaie en t
-            in_the_money = val_intriseque > 0
-
-            # Si des chemins sont dans la monnaie en t, on fait la regression
-            if np.any(in_the_money):  
-                
-                X = Spot_simule[in_the_money, t]        # prix du sous jacent en t
-                Y = discounted_CF_next[in_the_money]    # CF des chemins dans la monnaie en t1 actualisé en t
-                
-                # CF espérés en t pour les chemins dans la monnaie si on n'exerce pas
-                continuation_values = RegressionEstimator(X, Y, degree=2,poly_type=poly_type).Regression(X,Y)
-
-                # Exercice anticipé en t si valeur en t est supérieure à la valeur espérée
-                exercise = val_intriseque[in_the_money] > continuation_values
-                
-                # Mise à jour des CF en t pour les chemins dans la monnaie
-                CF_Vect[in_the_money] = np.where(exercise, val_intriseque[in_the_money], discounted_CF_next[in_the_money])
-        
-        
-        # Valeur en t0
-        CF0 = CF_Vect
-        prix = np.mean(CF0)
-        std_prix = np.std(CF0) / np.sqrt(len(CF0))
-        print("Nb chemins :",len(CF0))
-        print("Prix min :",prix - 2*std_prix)
-        print("Prix max :",prix + 2*std_prix)
 
         return (prix, std_prix)
