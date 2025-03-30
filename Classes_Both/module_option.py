@@ -26,7 +26,11 @@ class Option :
 
     @property
     def maturity(self) -> float:
-        return (self.maturite - self.date_pricing).days / 365.0 # changer à 252 ? faut mettre partout la même chose mais .days() ne prend pas que les BD
+        return (self.maturite - self.date_pricing).days / 365.0 
+    
+    @maturity.setter
+    def maturity(self, value: float):
+        self.maturite = self.date_pricing + dt.timedelta(days=int(value * 365))
     
     def get_dividend(self, market : DonneeMarche, brownian: Brownian, inf, sup):
         if 0 < (market.dividende_ex_date - self.date_pricing).days / 365 <= (self.maturite - self.date_pricing).days / 365:

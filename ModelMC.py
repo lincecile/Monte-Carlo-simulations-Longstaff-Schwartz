@@ -1,6 +1,7 @@
 from Classes_Both.module_marche import DonneeMarche
 from Classes_MonteCarlo_LSM.module_brownian import Brownian
 from Classes_Both.module_option import Option
+from Classes_Both.derivatives import OptionDerivatives, OptionDerivativesParameters
 import datetime as dt
 import numpy as np
 import time
@@ -39,6 +40,13 @@ vector_time = end_time_vector - start_time_vector
 print("Temps exe méthode vectorielle : ",vector_time)
 print("Prix Vecteur : ", priceV4)
 #print("Prix Vecteur : ", priceV2, priceV3, priceV4,priceV5)
+
+option_deriv = OptionDerivatives(option, market)  
+#print("Prix :", option_deriv.price(option_deriv.parameters))
+#print("Delta :", option_deriv.delta())
+#print("Vega :", option_deriv.vega())
+print("Theta :", option_deriv.theta())
+#print("Gamma :", option_deriv.gamma())
 
 
 exit()
