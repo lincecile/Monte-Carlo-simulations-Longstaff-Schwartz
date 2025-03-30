@@ -11,7 +11,7 @@ end_date = dt.datetime(2026, 1, 1)
 
 market = DonneeMarche(date_debut= start_date,
 volatilite=0.2, 
-taux_interet=0.15, 
+taux_interet=0.06, 
 taux_actualisation=0.06,
 # dividends=[{"ex_div_date": dt.datetime(2024, 4, 21), "amount": 3, "rate": 0}], 
 dividende_ex_date = dt.datetime(2024, 4, 21),

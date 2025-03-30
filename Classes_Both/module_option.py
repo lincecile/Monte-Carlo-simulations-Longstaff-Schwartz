@@ -139,12 +139,16 @@ class Option :
     # call euro ok
     # put euro ok
 
-    def payoff_LSM3(self, brownian : Brownian, market: DonneeMarche, method='vector'):
+    def payoff_LSM3(self, brownian : Brownian, market: DonneeMarche, method='vector', antithetic: bool = False):
         # Générer les trajectoires des prix
-        stock_price_paths = self.Price(market, brownian, method=method)
-        print("stock_price_paths:",stock_price_paths)
-        # exit()
-        # Calcul du val_intriseque final
+
+        if antithetic:
+            stock_price_paths_pos, stock_price_paths_neg = self.Price(market, brownian, method=method, antithetic=antithetic)
+            stock_price_paths = np.concatenate([stock_price_paths_pos, stock_price_paths_neg], axis=0)
+        else:
+            stock_price_paths = self.Price(market, brownian, method=method, antithetic=antithetic)
+
+        # Calcul du payoff final
         if self.call:
             final_payoff = np.maximum(0, stock_price_paths[:, -1] - self.prix_exercice)
         else:
@@ -153,7 +157,12 @@ class Option :
         # exit()
         # Pour les options européennes, retourner simplement le val_intriseque actualisé
         if not self.americaine:
-            return np.mean(final_payoff * np.exp(-market.taux_interet * self.maturity))
+            prix = np.mean(final_payoff * np.exp(-market.taux_interet * self.maturity))
+            std_prix = np.std(final_payoff * np.exp(-market.taux_interet * self.maturity)) / np.sqrt(len(final_payoff))
+            print("Nb chemins :",len(final_payoff))
+            print("Prix min :",prix - 2*std_prix)
+            print("Prix max :",prix + 2*std_prix)
+            return (prix, std_prix)
         
         # Pour les options américaines
         CF_vect = final_payoff.copy()
@@ -188,8 +197,17 @@ class Option :
             # Actualiser tous les cash-flows
             CF_vect *= np.exp(-market.taux_interet * brownian.step)
 
-        prix = np.mean(CF_vect)
-        std_prix = np.std(CF_vect) / np.sqrt(len(CF_vect))
+        if not antithetic:
+            prix = np.mean(CF_vect)
+            std_prix = np.std(CF_vect) / np.sqrt(len(CF_vect))
+            print("Nb chemins :",len(CF_vect))
+            print("Prix min :",prix - 2*std_prix)
+            print("Prix max :",prix + 2*std_prix)
+
+        moitie = len(CF_vect) // 2
+        CF_vect_final = (CF_vect[:moitie] + CF_vect[moitie:]) / 2
+        prix = np.mean(CF_vect_final)
+        std_prix = np.std(CF_vect_final) / np.sqrt(len(CF_vect_final))
         print("Nb chemins :",len(CF_vect))
         print("Prix min :",prix - 2*std_prix)
         print("Prix max :",prix + 2*std_prix)
