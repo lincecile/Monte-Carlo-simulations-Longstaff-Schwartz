@@ -3,34 +3,36 @@ import scipy.stats as stats
 import pandas as pd
 
 class Brownian:
-    def __init__(self, n , N, seed):
-        self.n = n
-        self.N = N
-        self.step = 1 / n
+    def __init__(self, time_to_maturity, nb_step , nb_trajectoire, seed):
+        self.nb_step = nb_step
+        self.nb_trajectoire = nb_trajectoire
+        self.step = time_to_maturity / self.nb_step
         self.seed = seed
-        self._generator : np.random.Generator = np.random.default_rng(self.seed)
+        # self._generator : np.random.Generator = np.random.default_rng(self.seed)
+        print(self.seed)
+        np.random.seed(self.seed)
 
     def Scalaire(self):
         # Mouvement Brownien
-        W = np.zeros(self.n+1) 
-        for i in range(1,self.n+1): 
-            uniform_samples = self._generator.uniform(0, 1)
+        W = np.zeros(self.nb_step+1) 
+        for i in range(1,self.nb_step+1): 
+            uniform_samples = np.random.uniform(0, 1)
             W[i] = W[i-1]+stats.norm.ppf(uniform_samples) * np.sqrt(self.step)
         return W
 
 
     def Vecteur(self):
         # Génération vectorielle des mouvements browniens
-        uniform_samples = self._generator.uniform(0, 1, (self.N,self.n)) 
+        uniform_samples = np.random.uniform(0, 1, (self.nb_trajectoire,self.nb_step)) 
         Z = stats.norm.ppf(uniform_samples)
         dW = np.sqrt(self.step) * Z
-
+        
         # Construction du mouvement brownien
-        W = np.zeros((self.N, self.n+1))
+        W = np.zeros((self.nb_trajectoire, self.nb_step+1))
         W[:, 1:] = np.cumsum(dW, axis=1)
         
-        # self._generator = np.random.default_rng(self.seed)
-
-        return W
+        timedelta = np.array([self.step * i for i in range(self.nb_step+1)])
+        
+        return W, timedelta
 
 

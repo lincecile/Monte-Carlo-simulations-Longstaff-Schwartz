@@ -6,7 +6,10 @@ import numpy as np
 import time
 
 ### TEST ###
-market = DonneeMarche(date_debut= dt.datetime(2024, 1, 1),
+start_date = dt.datetime(2024, 1, 1)
+end_date = dt.datetime(2026, 1, 1)
+
+market = DonneeMarche(date_debut= start_date,
 volatilite=0.2, 
 taux_interet=0.15, 
 taux_actualisation=0.06,
@@ -16,17 +19,20 @@ dividende_montant = 0,
 dividende_rate=0,
 prix_spot=100)
 
-option = Option(date_pricing=dt.datetime(2024, 1, 1), 
-                maturite=dt.datetime(2025, 1, 1), 
-                prix_exercice=115, call=True, americaine=False)
+option = Option(date_pricing=start_date, 
+                maturite=end_date, 
+                prix_exercice=90, call=True, americaine=True)
 
-brownian = Brownian(10, 1000000, 1)
+period = (end_date - start_date).days / 365
+brownian = Brownian(period, 10, 1000000, 1)
 # avec 5 step europeen marche pas
 start_time_vector = time.time()
 #priceV2 = option.payoff_LSM(brownian, market, method='vector')
 #priceV3 = option.payoff_LSMBBB(brownian, market, method='vector')
-priceV4 = option.payoff_LSM3(brownian, market, method='vector')
-#priceV5 = option.payoff_LSM4(brownian, market, method='vector')
+priceV4 = option.LSM(brownian, market, method='vector',antithetic=True)
+
+# brownian = Brownian(period, 10, 1000000, 1)
+# priceV5 = option.LSM(brownian, market, method='vector')
 
 end_time_vector = time.time()
 vector_time = end_time_vector - start_time_vector

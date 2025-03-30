@@ -33,9 +33,9 @@ class Option :
             return market.dividende_rate
         return 0
     
-    def Price(self, market : DonneeMarche, brownian: Brownian, method: str = 'vector') -> float:
+    def Price(self, market : DonneeMarche, brownian: Brownian, method: str = 'vector',  antithetic : bool=False) -> float:
         """
-        Calcule le payoff de l'option en utilisant un mouvement brownien.
+        Calcule le val_intriseque de l'option en utilisant un mouvement brownien.
         
         Args:
             brownian: Le mouvement brownien (sortie de Brownian.Scalaire() ou Brownian.Vecteur())
@@ -43,27 +43,36 @@ class Option :
             method: 'vector' ou 'scalar' selon la méthode de calcul du brownian
             
         Returns:
-            float: La valeur actualisée du payoff moyen
+            float: La valeur actualisée du val_intriseque moyen
         """
         # Extraction des paramètres du marché
         S0 = market.prix_spot
-        r = market.taux_interet
+        taux_interet = market.taux_interet
         sigma = market.volatilite
         q = market.dividende_rate  # Taux de dividende total
         T = self.maturity
-        import pandas as pd
         if method == 'vector':
             # Pour la méthode vectorielle
-            W = brownian.Vecteur()
-            S_T = S0 * np.exp((r - q - sigma**2/2) * T + sigma * W[:, :]) - self.get_dividend(market, brownian, 0, 1)
+            W, timedelta = brownian.Vecteur()
+            S_T = S0 * np.exp((taux_interet - q - sigma**2/2) * timedelta + sigma * W) - self.get_dividend(market, brownian, 0, 1)
             S_T[:,0] = S0
+            if antithetic:
+                W_neg = -W
+                S_T_pos = S0 * np.exp((taux_interet - q - sigma**2/2) * timedelta + sigma * W) - self.get_dividend(market, brownian, 0, 1)
+                S_T_neg = S0 * np.exp((taux_interet - q - sigma**2/2) * timedelta + sigma * W_neg) - self.get_dividend(market, brownian, 0, 1)
+                S_T_pos[:,0] = S0
+                S_T_neg[:,0] = S0
+                return S_T_pos, S_T_neg
+            else:
+                S_T = S0 * np.exp((taux_interet - q - sigma**2/2) * timedelta + sigma * W) - self.get_dividend(market, brownian, 0, 1)
+                S_T[:,0] = S0
         else:
             # Pour la méthode scalaire
-            S_T = np.ones((brownian.N,brownian.n+1))*S0
-            for i in range(brownian.N):
+            S_T = np.ones((brownian.nb_trajectoire,brownian.nb_step+1))*S0
+            for i in range(brownian.nb_trajectoire):
                 W = brownian.Scalaire() 
-                for j in range(1,brownian.n+1):
-                    S_T[i,j] = S0*np.exp( (r - q - sigma**2 / 2)*T + sigma* W[j]) - self.get_dividend( market, brownian, 0, 1)
+                for j in range(1,brownian.nb_step+1):
+                    S_T[i,j] = S0*np.exp( (taux_interet - q - sigma**2 / 2)*T + sigma* W[j]) - self.get_dividend( market, brownian, 0, 1)
 
         ## Exemple
         """ S_T = np.array([
@@ -82,30 +91,36 @@ class Option :
     # marche call euro et americain
     def payoff_LSM(self, brownian : Brownian, market: DonneeMarche, method='vector'):
         stock_price_paths = self.Price(market, brownian, method=method)
+        if self.call:
+            val_intriseque =  np.maximum(stock_price_paths - self.prix_exercice, 0.0)
+        else:
+            val_intriseque =  np.maximum(self.prix_exercice - stock_price_paths, 0.0)
 
         # Initialisation des cash flows
         CF_vect = np.zeros(len(stock_price_paths))
-        if self.call:
-            CF_vect = np.maximum(0, stock_price_paths[:, -1] - self.prix_exercice)
-        else:
-            CF_vect = np.maximum(self.prix_exercice - stock_price_paths[:, -1], 0)
+        # if self.call:
+        #     CF_vect = np.maximum(0, stock_price_paths[:, -1] - self.prix_exercice)
+        # else:
+        #     CF_vect = np.maximum(self.prix_exercice - stock_price_paths[:, -1], 0)
+        print("vect",CF_vect)
         
-        for t in range(brownian.n , 0, -1):
+        for t in range(brownian.nb_step , 0, -1):
 
-            if self.call:
-                intrinsic_value = np.maximum(0, stock_price_paths[:, t] - self.prix_exercice)
-            else:
-                intrinsic_value = np.maximum(self.prix_exercice - stock_price_paths[:, t], 0)
-        
+            # if self.call:
+            #     intrinsic_value = np.maximum(0, stock_price_paths[:, t] - self.prix_exercice)
+            # else:
+            #     intrinsic_value = np.maximum(self.prix_exercice - stock_price_paths[:, t], 0)
+            intrinsic_value = val_intriseque[:,t]
             in_the_money = intrinsic_value > 0
+            intrinsic_value_discount = intrinsic_value * np.exp(-market.taux_interet*brownian.step)
 
-            if t < brownian.n - 1:
+            if t < brownian.nb_step - 1:
 
                 continuation_value = np.zeros_like(intrinsic_value)
-                if np.sum(in_the_money) > 0:#np.any(in_the_money) and t != brownian.n:  # Vérifie s'il y a des valeurs ITM
+                if np.sum(in_the_money) > 0:#np.any(in_the_money) and t != brownian.nb_step:  # Vérifie s'il y a des valeurs ITM
 
-                    X = stock_price_paths[in_the_money, t].reshape(-1, 1)
-                    Y = CF_vect[in_the_money] * np.exp(-market.taux_interet*brownian.step)
+                    X = stock_price_paths[in_the_money, t]
+                    Y = intrinsic_value_discount[in_the_money]
 
                     estimator = RegressionEstimator(X, Y, degree=2)
                     continuation_value[in_the_money] = estimator.get_estimator(X)
@@ -119,51 +134,6 @@ class Option :
         
         return np.mean(CF_vect)
     
-    # marche call et put euro
-    def payoff_LSMBBB(self, brownian : Brownian, market: DonneeMarche, method='vector'):
-        stock_price_paths = self.Price(market, brownian, method=method)
-
-        # Initialisation des cash flows
-        CF_vect = np.zeros(len(stock_price_paths))
-
-        # Final payoff calculation based on option type
-        if self.call:
-            CF_vect = np.maximum(0, stock_price_paths[:, -1] - self.prix_exercice)
-        else:
-            CF_vect = np.maximum(self.prix_exercice - stock_price_paths[:, -1], 0)
-        
-        # Early exercise logic for American options
-        if self.americaine:
-            for t in range(brownian.n, 0, -1):
-                # Calculate intrinsic value at current time step
-                if self.call:
-                    intrinsic_value = np.maximum(0, stock_price_paths[:, t] - self.prix_exercice)
-                else:
-                    intrinsic_value = np.maximum(self.prix_exercice - stock_price_paths[:, t], 0)
-            
-                in_the_money = intrinsic_value > 0
-                
-                # if t < brownian.n - 1 and np.sum(in_the_money) > 0:
-                if t < brownian.n - 1:
-
-                    continuation_value = np.zeros_like(intrinsic_value)
-                    if np.sum(in_the_money) > 0:
-                        # Regression to estimate continuation value
-                        X = stock_price_paths[in_the_money, t].reshape(-1, 1)
-                        Y = CF_vect[in_the_money] * np.exp(-market.taux_interet * brownian.step)
-                        
-                        estimator = RegressionEstimator(X, Y, degree=2)
-                        # continuation_value = np.zeros_like(intrinsic_value)
-                        continuation_value[in_the_money] = estimator.get_estimator(X)
-                    
-                    # Decide whether to exercise early
-                    exercise = (intrinsic_value > continuation_value) & in_the_money
-                    CF_vect = np.where(exercise, intrinsic_value, CF_vect * np.exp(-market.taux_interet * brownian.step))
-            # CF_vect = CF_vect*np.exp(-market.taux_interet*brownian.step)
-        
-        # Discounting the final cash flows
-        return np.mean(CF_vect * np.exp(-market.taux_interet * self.maturity))
-    
 
     # call US ok 1cts d'ecart
     # call euro ok
@@ -172,14 +142,16 @@ class Option :
     def payoff_LSM3(self, brownian : Brownian, market: DonneeMarche, method='vector'):
         # Générer les trajectoires des prix
         stock_price_paths = self.Price(market, brownian, method=method)
-
-        # Calcul du payoff final
+        print("stock_price_paths:",stock_price_paths)
+        # exit()
+        # Calcul du val_intriseque final
         if self.call:
             final_payoff = np.maximum(0, stock_price_paths[:, -1] - self.prix_exercice)
         else:
             final_payoff = np.maximum(self.prix_exercice - stock_price_paths[:, -1], 0)
-        
-        # Pour les options européennes, retourner simplement le payoff actualisé
+        print("val_intriseque:",final_payoff)
+        # exit()
+        # Pour les options européennes, retourner simplement le val_intriseque actualisé
         if not self.americaine:
             return np.mean(final_payoff * np.exp(-market.taux_interet * self.maturity))
         
@@ -187,7 +159,7 @@ class Option :
         CF_vect = final_payoff.copy()
         
         # Parcourir les étapes à l'envers
-        for t in range(brownian.n - 1, 0, -1):
+        for t in range(brownian.nb_step - 1, 0, -1):
             # Calculer la valeur intrinsèque à l'étape courante
             if self.call:
                 intrinsic_value = np.maximum(0, stock_price_paths[:, t] - self.prix_exercice)
@@ -225,138 +197,144 @@ class Option :
         return (prix, std_prix)
 
 
-    def payoff_LSM4(self, brownian: Brownian, market: DonneeMarche, method='vector'):
-    
-        stock_price_paths = self.Price(market, brownian, method=method)
+    def LSM(self, brownian: Brownian, market: DonneeMarche, poly_degree=2, poly_type="standard", method='vector', antithetic : bool=False):
 
-        # Calcul du payoff final
-        if self.call:
-            final_payoff = np.maximum(0, stock_price_paths[:, -1] - self.prix_exercice)
+        # Prix du sous-jacent simulé
+        Spot_simule = self.Price(market, brownian, method=method)
+
+        if antithetic:
+            stock_price_paths_pos, stock_price_paths_neg = self.Price(market, brownian, method=method, antithetic=antithetic)
+            Spot_simule = np.concatenate([stock_price_paths_pos, stock_price_paths_neg], axis=0)
         else:
-            final_payoff = np.maximum(self.prix_exercice - stock_price_paths[:, -1], 0)
+            Spot_simule = self.Price(market, brownian, method=method, antithetic=antithetic)
+
+        # Calcul valeur intrinsèque à chaque pas de temps
+        if self.call:
+            val_intriseque = np.maximum(Spot_simule - self.prix_exercice, 0.0)
+        else:
+            val_intriseque = np.maximum(self.prix_exercice - Spot_simule, 0.0)
         
-        # Pour les options européennes, retourner simplement le payoff actualisé
+        # Valeur de l'option européenne
         if not self.americaine:
-            return np.mean(final_payoff * np.exp(-market.taux_interet * self.maturity))
+            # return np.mean(val_intriseque[:,-1] * np.exp(-market.taux_interet * self.maturity))
+            prix = np.mean(val_intriseque[:,-1] * np.exp(-market.taux_interet * self.maturity))
+            std_prix = np.std(val_intriseque[:,-1] * np.exp(-market.taux_interet * self.maturity)) / np.sqrt(len(val_intriseque[:,-1]))
+            print("Nb chemins :",len(val_intriseque[:,-1]))
+            print("Prix min :",prix - 2*std_prix)
+            print("Prix max :",prix + 2*std_prix)
+            return (prix, std_prix)
         
-        # Pour les options américaines
-        CF_vect = final_payoff.copy()
+        # Matrice des cash flows
+        CF = np.zeros_like(Spot_simule)
+        CF[:, -1] = val_intriseque[:, -1]  # Cash flows à la maturité, valeur intrinsèque
+        # print(pd.DataFrame(val_intriseque))
+        # x = input()
+        # Algo LSM
+        for t in range(brownian.nb_step - 1, -1, -1): 
+            
+            # CF en t1 actualisé
+            discounted_CF_next = CF[:, t+1] * np.exp(-market.taux_interet * self.maturity / brownian.nb_step)
+            print("discounted_CF_next",discounted_CF_next, CF[:, t+1])
+            # x = input()
+            # Chemins dans la monnaie en t            
+            in_the_money = val_intriseque[:, t] > 0
+            
+            # CF en t1 actualisé en t par défaut
+            CF[:, t] = discounted_CF_next
+            # Si des chemins sont dans la monnaie en t, on fait la regression
+            if np.any(in_the_money):  
+                
+                X = Spot_simule[in_the_money, t]        # prix du sous jacent en t
+                Y = discounted_CF_next[in_the_money]    # CF des chemins dans la monnaie en t1 actualisé en t
+                
+                # CF espérés en t pour les chemins dans la monnaie si on n'exerce pas
+                continuation_values = RegressionEstimator(X, Y, degree=2,poly_type=poly_type).Regression(X,Y)
+
+                # Exercice anticipé en t si valeur en t est supérieure à la valeur espérée
+                exercise = val_intriseque[in_the_money, t] > continuation_values
+                
+                # Mise à jour des CF en t pour les chemins dans la monnaie
+                CF[in_the_money, t] = np.where(exercise, val_intriseque[in_the_money, t], discounted_CF_next[in_the_money])
         
-        # Parcourir les étapes à l'envers
-        for t in range(brownian.n - 1, 0, -1):
-            # Calculer la valeur intrinsèque à l'étape courante
+        # Valeur en t0
+        CF0 = CF[:, 0]
+        if not antithetic:
+            prix = np.mean(CF0)
+            std_prix = np.std(CF0) / np.sqrt(len(CF0))
+            print("Nb chemins :",len(CF0))
+            print("Prix min non antithetic:",prix - 2*std_prix)
+            print("Prix max non antithetic:",prix + 2*std_prix)
+        
+        moitie = len(CF0) // 2
+        CF_vect_final = (CF0[:moitie] + CF0[moitie:]) / 2
+        prix = np.mean(CF_vect_final)
+        std_prix = np.std(CF_vect_final) / np.sqrt(len(CF_vect_final))
+        print("Nb chemins :",len(CF0))
+        print("Prix min antithetic:",prix - 2*std_prix)
+        print("Prix max antithetic:",prix + 2*std_prix)
+
+        return (prix, std_prix)
+
+    def LSM2(self, brownian: Brownian, market: DonneeMarche, poly_degree=2, poly_type="standard", method='vector'):
+        # Prix du sous-jacent simulé
+        Spot_simule = self.Price(market, brownian, method=method)
+        
+        # Calcul valeur intrinsèque à chaque pas de temps
+        if self.call:
+            val_intriseque = np.maximum(Spot_simule[:,-1] - self.prix_exercice, 0.0)
+        else:
+            val_intriseque = np.maximum(self.prix_exercice - Spot_simule[:,-1], 0.0)
+        
+        # Valeur de l'option européenne
+        if not self.americaine:
+            return np.mean(val_intriseque * np.exp(-market.taux_interet * self.maturity))
+        
+        # Matrice des cash flows
+        CF = np.zeros_like(Spot_simule)
+        CF[:, -1] = val_intriseque  # Cash flows à la maturité, valeur intrinsèque
+        CF_Vect = val_intriseque.copy()
+
+        # Algo LSM
+        for t in range(brownian.nb_step - 1, -1, -1): 
+
             if self.call:
-                intrinsic_value = np.maximum(0, stock_price_paths[:, t] - self.prix_exercice)
+                print('innnn')
+                val_intriseque = np.maximum(Spot_simule[:,t] - self.prix_exercice, 0.0)
+                val_intriseque1 = np.maximum(Spot_simule[:,t+1] - self.prix_exercice, 0.0)
+                print('val_intriseque1',val_intriseque1)
             else:
-                intrinsic_value = np.maximum(self.prix_exercice - stock_price_paths[:, t], 0)
+                val_intriseque = np.maximum(self.prix_exercice - Spot_simule[:,t], 0.0)
+                val_intriseque1 = np.maximum(self.prix_exercice - Spot_simule[:,t+1], 0.0)
             
-            # Sélectionner uniquement les chemins intéressants
-            in_the_money = intrinsic_value > 0
-            
-            if np.sum(in_the_money) > 0:
-                # Préparer les données pour la régression
-                X = stock_price_paths[in_the_money, t].reshape(-1, 1)
-                Y = CF_vect[in_the_money] * np.exp(-market.taux_interet * brownian.step)
+            # CF en t1 actualisé
+            discounted_CF_next = val_intriseque1 * np.exp(-market.taux_interet * self.maturity / brownian.nb_step)
+            print("val_intriseque1",val_intriseque1)
+            x = input()
+            # Chemins dans la monnaie en t
+            in_the_money = val_intriseque > 0
+
+            # Si des chemins sont dans la monnaie en t, on fait la regression
+            if np.any(in_the_money):  
                 
-                # Estimer la valeur de continuation
-                estimator = RegressionEstimator(X, Y, degree=2)
-                continuation_value = np.zeros_like(intrinsic_value)
-                continuation_value[in_the_money] = estimator.get_estimator(X)
+                X = Spot_simule[in_the_money, t]        # prix du sous jacent en t
+                Y = discounted_CF_next[in_the_money]    # CF des chemins dans la monnaie en t1 actualisé en t
                 
-                # Décider de l'exercice anticipé
-                exercise = (intrinsic_value > continuation_value) & in_the_money
+                # CF espérés en t pour les chemins dans la monnaie si on n'exerce pas
+                continuation_values = RegressionEstimator(X, Y, degree=2,poly_type=poly_type).Regression(X,Y)
+
+                # Exercice anticipé en t si valeur en t est supérieure à la valeur espérée
+                exercise = val_intriseque[in_the_money] > continuation_values
                 
-                # Mettre à jour les cash-flows
-                CF_vect[exercise] = intrinsic_value[exercise]
-            
-            # Actualiser tous les cash-flows
-            CF_vect *= np.exp(-market.taux_interet * brownian.step)
+                # Mise à jour des CF en t pour les chemins dans la monnaie
+                CF_Vect[in_the_money] = np.where(exercise, val_intriseque[in_the_money], discounted_CF_next[in_the_money])
         
-        return np.mean(CF_vect)
+        
+        # Valeur en t0
+        CF0 = CF_Vect
+        prix = np.mean(CF0)
+        std_prix = np.std(CF0) / np.sqrt(len(CF0))
+        print("Nb chemins :",len(CF0))
+        print("Prix min :",prix - 2*std_prix)
+        print("Prix max :",prix + 2*std_prix)
 
-    def payoff_LSM2(self, brownian : Brownian, market: DonneeMarche, method='vector'):
-        stock_price_paths = self.Price(market, brownian, method=method)
-        stock_price_paths = np.array(stock_price_paths)
-        if self.call:
-            intrinsic_value_paths = np.maximum(0, stock_price_paths - self.prix_exercice)
-            print('in call')
-        else:
-            intrinsic_value_paths = np.maximum(0, self.prix_exercice - stock_price_paths)
-            print('in put')
-
-        # Initialisation des cash flows
-        CF_vect = intrinsic_value_paths[:,-1]
-        print(pd.DataFrame(stock_price_paths))
-        print(pd.DataFrame(intrinsic_value_paths))
-        
-        for t in range(brownian.n-1 , 0, -1):
-            print()
-            print('temps ',t)
-            stock_price_t = stock_price_paths[:, t]
-            intrinsic_value_t = intrinsic_value_paths[:,t]
-
-            in_the_money = intrinsic_value_t > 0
-            continuation_value = np.zeros_like(intrinsic_value_t)
-            print(in_the_money)
-                        
-            if np.any(in_the_money):# and t != brownian.n:  # Vérifie s'il y a des valeurs ITM
-                print('in')
-                X = stock_price_t[in_the_money]
-                print('X',X)
-                print('step',brownian.step)
-                print('t',t)
-                print('market.taux_interet',market.taux_interet,-market.taux_interet*brownian.step)
-                print('IV', CF_vect[in_the_money])
-                Y = CF_vect[in_the_money] * np.exp(-market.taux_interet*brownian.step)
-                print('Y',Y)
-                estimator = RegressionEstimator(X, Y, degree=2)
-                continuation_value[in_the_money] = estimator.get_estimator(X)
-                print(continuation_value)
-        
-            # x = input()
-            exercise = intrinsic_value_t > continuation_value
-            print('nb exercise', sum(exercise))
-            print(CF_vect*np.exp(-market.taux_interet*brownian.step))
-            # if sum(exercise) > brownian.N*20/100:
-            #     print(t)
-            #     x = input()
-            CF_vect = np.where(exercise, intrinsic_value_t, CF_vect*np.exp(-market.taux_interet*brownian.step))
-            print(CF_vect)
-        print('t=0')
-        print(np.mean(CF_vect*np.exp(-market.taux_interet*(brownian.step))))
-            # x = input()
-        
-        return np.mean(CF_vect)*np.exp(-market.taux_interet*(brownian.step))
-
-    def payoff_intrinseque_classique(self, brownian : Brownian, market: DonneeMarche, method : str = 'vector') -> float:
-        """
-        Calcule le payoff de l'option en utilisant un mouvement brownien.
-        
-        Args:
-            brownian: Le mouvement brownien (sortie de Brownian.Scalaire() ou Brownian.Vecteur())
-            market: Instance de la classe DonneeMarche contenant les paramètres du marché
-            method: 'vector' ou 'scalar' selon la méthode de calcul du brownian
-            
-        Returns:
-            float: La valeur actualisée du payoff moyen
-        """
-        # Extraction des paramètres du marché
-        #S0 = market.price
-        #sigma = market.sigma
-        #q = sum(div["rate"] for div in market.dividends)  # Taux de dividende total
-        #n = 10
-        #N = 100
-        r = market.taux_interet
-        T = self.maturity
-        S_T = self.Price(market, brownian, method=method)
-        
-        # Calcul des payoffs selon le type d'option (call ou put)
-        if self.call:
-            payoffs = np.maximum(S_T[:,-1] - self.prix_exercice, 0)
-        else:
-            payoffs = np.maximum(self.prix_exercice - S_T[:,-1], 0)
-        
-        # Calcul de la NPV (Net Present Value)
-        NPV = np.mean(payoffs) * np.exp(-r * T)
-
-        return NPV
+        return (prix, std_prix)
