@@ -74,7 +74,7 @@ class LSM_method :
             
             S_T[:,0] = S0
             print(pd.DataFrame(S_T))
-            x = input()
+            #x = input()
             
             if antithetic:
                 print('in antithetic')
@@ -93,6 +93,96 @@ class LSM_method :
                     S_T[i,j] = S0 * np.exp((taux_interet - q - sigma**2 / 2) * T + sigma * W[j]) - self.get_dividend(market, brownian, 0, 1)
 
         return S_T
+        
+
+
+    def Price_Heston(self, market: DonneeMarche, brownian: Brownian, method: str = 'vector', antithetic: bool = False):
+        """
+        Calcule les trajectoires du sous-jacent en utilisant le modèle de Heston.
+        
+        Args:
+            market: Instance de DonneeMarche contenant les paramètres du marché.
+            method: 'vector' ou 'scalar' selon la méthode de simulation.
+            antithetic: Booléen indiquant si on utilise des variables antithétiques.
+
+        Returns:
+            np.ndarray: Matrice des trajectoires simulées du sous-jacent.
+        """
+    
+        # Extraction des paramètres du marché
+        S0 = market.prix_spot
+        v0 = market.volatilite ** 2 
+        r = market.taux_interet
+        taux_interet = market.taux_interet
+        sigma = market.volatilite
+        q = market.dividende_montant  # Taux de dividende total
+        T = self.option.maturity
+        m = brownian.nb_step  # Nombre de pas de temps
+        n = brownian.nb_trajectoire  # Nombre de trajectoires
+        rho=-0.5
+        kappa=0.5
+        theta=0.04
+        eta=0.1
+        q = market.dividende_montant  # Montant du dividende
+
+        # Discrétisation du temps
+        dt = T / m  
+
+        # Génération des nombres aléatoires pour les chocs de prix et de variance
+        z1 = np.random.randn(m, n)
+        z2 = rho * z1 + np.sqrt(1 - rho ** 2) * np.random.randn(m, n)  
+
+        # Matrices pour stocker les trajectoires du prix et de la variance
+        S = np.zeros((m + 1, n))
+        V = np.zeros((m + 1, n))
+
+        # Initialisation des valeurs
+        S[0] = S0
+        V[0] = v0
+
+        # Simulation des trajectoires avec le modèle de Heston
+        for i in range(m):
+            V[i + 1] = (
+                V[i] + kappa * (theta - V[i]) * dt
+                + eta * np.sqrt(V[i] * dt) * z1[i]
+                + (eta**2 / 4) * (z1[i]**2 - 1) * dt
+            )
+            V[i + 1] = np.maximum(V[i + 1], 0)  # Éviter les valeurs négatives de variance
+
+            S[i + 1] = S[i] * np.exp((r - q - V[i] / 2) * dt + np.sqrt(V[i] * dt) * z2[i])
+
+        # Ajustement des dividendes
+        if q > 0:
+            position_div = self.__calcul_position_div(market=market, nb_steps=m)
+            S[position_div + 1] -= q  # Impact du dividende sur le prix
+            S[position_div + 2:] = S[position_div + 1] * np.exp(
+                (r - q - market.volatilite**2 / 2) * dt + market.volatilite * np.random.randn(n) * np.sqrt(dt)
+            )
+
+        # Gestion des variables antithétiques (réduction de variance)
+        if antithetic:
+            z1_neg = -z1
+            z2_neg = rho * z1_neg + np.sqrt(1 - rho ** 2) * np.random.randn(m, n)
+
+            S_neg = np.zeros_like(S)
+            V_neg = np.zeros_like(V)
+            S_neg[0] = S0
+            V_neg[0] = v0
+
+            for i in range(m):
+                V_neg[i + 1] = (
+                    V_neg[i] + kappa * (theta - V_neg[i]) * dt
+                    + eta * np.sqrt(V_neg[i] * dt) * z1_neg[i]
+                    + (eta**2 / 4) * (z1_neg[i]**2 - 1) * dt
+                )
+                V_neg[i + 1] = np.maximum(V_neg[i + 1], 0)
+
+                S_neg[i + 1] = S_neg[i] * np.exp((r - q - V_neg[i] / 2) * dt + np.sqrt(V_neg[i] * dt) * z2_neg[i])
+
+            return np.concatenate([S, S_neg], axis=0)
+
+        return S.T
+
     
     def payoff_LSM(self, brownian: Brownian, market: DonneeMarche, method='vector'):
         stock_price_paths = self.Price(market, brownian, method=method)
