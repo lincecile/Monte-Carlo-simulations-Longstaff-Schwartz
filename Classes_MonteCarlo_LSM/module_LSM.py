@@ -21,11 +21,6 @@ class LSM_method :
     
     def __init__(self, option: Option):
         self.option = option
-        
-    def get_dividend(self, market: DonneeMarche, brownian: Brownian, inf, sup):
-        if 0 < (market.dividende_ex_date - self.option.date_pricing).days / 365 <= (self.option.maturite - self.option.date_pricing).days / 365:
-            return market.dividende_rate
-        return 0
     
     def __calcul_position_div (self, market: DonneeMarche, brownian: Brownian):
         """Nous permet de calculer la position du dividende dans l'arbre
@@ -35,58 +30,90 @@ class LSM_method :
         """
         nb_jour_detachement = (market.dividende_ex_date - self.option.date_pricing).days
         position_div = nb_jour_detachement / 365 / brownian.step
-        # print("position_div", position_div)
-        # print('market.step', brownian.step)
         
         return position_div
+    
+    def adjust_for_dividends(self, S_T, market, brownian, W, timedelta):
+        """ Ajuste les trajectoires pour prendre en compte les dividendes. """
+        position_div = self.__calcul_position_div(market=market, brownian=brownian)
+        S_T[:, int(position_div)+1] -= market.dividende_montant
+        S_T[:, int(position_div) + 2:] = S_T[:, int(position_div) + 1][:, np.newaxis] * np.exp(
+            (market.taux_interet - market.volatilite**2 / 2) * 
+            (timedelta[int(position_div) + 2:] - timedelta[int(position_div) + 1]) +
+            market.volatilite * (W[:, int(position_div) + 2:] - W[:, int(position_div) + 1][:, np.newaxis]))
+
+    def antithetic_mode(self, S0, taux_interet, sigma, W, timedelta):
+        """ Applique la méthode antithétique. """
+        W_neg = -W
+        S_T_pos = S0 * np.exp((taux_interet - sigma**2/2) * timedelta + sigma * W)
+        S_T_neg = S0 * np.exp((taux_interet - sigma**2/2) * timedelta + sigma * W_neg)
+        S_T_pos[:,0] = S0
+        S_T_neg[:,0] = S0
+        return S_T_pos, S_T_neg
+    
+    def vector_method(self, S0, taux_interet, sigma, q, market, brownian, antithetic):
+        """ Calcule les trajectoires avec la méthode vectorielle. """
+        W = brownian.Vecteur()
+        timedelta = np.array([brownian.step * i for i in range(brownian.nb_step+1)])
+        S_T = S0 * np.exp((taux_interet - sigma**2/2) * timedelta + sigma * W)
+        
+        if q > 0:
+            self.adjust_for_dividends(S_T, market, brownian, W, timedelta)
+        
+        S_T[:,0] = S0
+        
+        if antithetic:
+            return self.antithetic_mode(S0, taux_interet, sigma, W, timedelta)
+        
+        return S_T
+    
+    def scalar_method(self, S0, taux_interet, sigma, q, T, market, brownian):
+        """ Calcule les trajectoires avec la méthode scalaire. """
+        S_T = np.ones((brownian.nb_trajectoire, brownian.nb_step+1)) * S0
+        
+        for i in range(brownian.nb_trajectoire):
+            W = brownian.Scalaire()
+            for j in range(1, brownian.nb_step+1):
+                S_T[i,j] = S0 * np.exp((taux_interet - q - sigma**2 / 2) * T + sigma * W[j]) - self.get_dividend(market, brownian, 0, 1)
+        
+        return S_T
     
     def Price(self, market: DonneeMarche, brownian: Brownian, method: str = 'vector', antithetic: bool = False):
         """
         Calcule le val_intriseque de l'option en utilisant un mouvement brownien.
-        
-        Args:
-            brownian: Le mouvement brownien (sortie de Brownian.Scalaire() ou Brownian.Vecteur())
-            market: Instance de la classe DonneeMarche contenant les paramètres du marché
-            method: 'vector' ou 'scalar' selon la méthode de calcul du brownian
-            
-        Returns:
-            float: La valeur actualisée du val_intriseque moyen
         """
+        S0 = market.prix_spot
+        taux_interet = market.taux_interet
+        sigma = market.volatilite
+        q = market.dividende_montant  
+        T = self.option.maturity
 
+        if method == 'vector':
+            return self.vector_method(S0, taux_interet, sigma, q, market, brownian, antithetic)
+        else:
+            return self.scalar_method(S0, taux_interet, sigma, q, T, market, brownian)
+
+    def Price2(self, market: DonneeMarche, brownian: Brownian, method: str = 'vector', antithetic: bool = False):
         # Extraction des paramètres du marché
         S0 = market.prix_spot
         taux_interet = market.taux_interet
         sigma = market.volatilite
-        q = market.dividende_montant  # Taux de dividende total
+        q = market.dividende_montant  
         T = self.option.maturity
         
         if method == 'vector':
             # Pour la méthode vectorielle
-            W, timedelta = brownian.Vecteur()
+            timedelta = np.array([brownian.step * i for i in range(brownian.nb_step+1)])
+            W = brownian.Vecteur()
             S_T = S0 * np.exp((taux_interet - sigma**2/2) * timedelta + sigma * W)
-            # print('la')
-            # print(pd.DataFrame(S_T))
+
             if q > 0:
-                print('in dividende price')
-                position_div = self.__calcul_position_div(market=market, brownian=brownian)
-                # print(position_div)
-                S_T[:, int(position_div)+1] = S_T[:, int(position_div)+1] - q
-                S_T[:, int(position_div) + 2:] = S_T[:, int(position_div) + 1][:, np.newaxis] * np.exp(
-                        (taux_interet - sigma**2 / 2) * (timedelta[int(position_div) + 2:] - timedelta[int(position_div) + 1]) + sigma * (
-                        W[:, int(position_div) + 2:] - W [:, int(position_div) + 1][:, np.newaxis]))
+                self.adjust_for_dividends(S_T, market, brownian, W, timedelta)
             
             S_T[:,0] = S0
-            # print(pd.DataFrame(S_T))
-            # x = input()
             
             if antithetic:
-                print('in antithetic price')
-                W_neg = -W
-                S_T_pos = S0 * np.exp((taux_interet - sigma**2/2) * timedelta + sigma * W)
-                S_T_neg = S0 * np.exp((taux_interet - sigma**2/2) * timedelta + sigma * W_neg)
-                S_T_pos[:,0] = S0
-                S_T_neg[:,0] = S0
-                return S_T_pos, S_T_neg
+                return self.antithetic_mode(S0, taux_interet, sigma, W, timedelta)
         else:
             # Pour la méthode scalaire
             S_T = np.ones((brownian.nb_trajectoire, brownian.nb_step+1)) * S0
@@ -120,9 +147,9 @@ class LSM_method :
             print("Prix max :", prix + 2*std_prix)
             return (prix, std_prix)
         
-        # Matrice des cash flows
-        CF_Vect = val_intriseque
-        
+        # Vecteur des cash flows
+        CF_Vect = val_intriseque.copy()
+
         # Algo LSM
         for t in range(brownian.nb_step - 1, 0, -1): 
             
@@ -130,12 +157,12 @@ class LSM_method :
             discounted_CF_next = CF_Vect * np.exp(-market.taux_interet * self.option.maturity / brownian.nb_step)
             
             if self.option.call:
-                val_intriseque2 = np.maximum(Spot_simule[:,t] - self.option.prix_exercice, 0.0)
+                val_intriseque = np.maximum(Spot_simule[:,t] - self.option.prix_exercice, 0.0)
             else:
-                val_intriseque2 = np.maximum(self.option.prix_exercice - Spot_simule[:,t], 0.0)
+                val_intriseque = np.maximum(self.option.prix_exercice - Spot_simule[:,t], 0.0)
 
             # Chemins dans la monnaie en t            
-            in_the_money = val_intriseque2 > 0
+            in_the_money = val_intriseque > 0
 
             # CF en t1 actualisé en t par défaut
             CF_Vect = discounted_CF_next.copy()
@@ -150,10 +177,10 @@ class LSM_method :
                 continuation_values = RegressionEstimator(X,Y, degree=poly_degree, model_type=model_type).Regression()
 
                 # Exercice anticipé en t si valeur en t est supérieure à la valeur espérée
-                exercise = val_intriseque2[in_the_money] > continuation_values
+                exercise = val_intriseque[in_the_money] > continuation_values
                 
                 # Mise à jour des CF en t pour les chemins dans la monnaie
-                CF_Vect[in_the_money]  = np.where(exercise, val_intriseque2[in_the_money], discounted_CF_next[in_the_money])
+                CF_Vect[in_the_money]  = np.where(exercise, val_intriseque[in_the_money], discounted_CF_next[in_the_money])
         
         # Valeur en t0
         CF_t0 = CF_Vect * np.exp(-market.taux_interet * self.option.maturity / brownian.nb_step)
@@ -177,3 +204,4 @@ class LSM_method :
         print("Prix max antithetic:", prix + 2*std_prix)
 
         return (prix, std_prix)
+    
