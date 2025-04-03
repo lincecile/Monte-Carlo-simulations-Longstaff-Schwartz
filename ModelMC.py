@@ -8,6 +8,7 @@ import numpy as np
 import time
 from Classes_TrinomialTree.module_arbre_noeud import Arbre
 import matplotlib.pyplot as plt
+import pandas as pd
 
 def plot_mc_intervals(option, market):
     """
@@ -155,7 +156,6 @@ taux_interet=0.15,
 taux_actualisation=0.15,
 # dividends=[{"ex_div_date": dt.datetime(2024, 4, 21), "amount": 3, "rate": 0}], 
 dividende_ex_date = dt.datetime(2024, 4, 21),
-dividende_ex_date = dt.datetime(2024, 4, 21),
 dividende_montant = 0,
 dividende_rate=0,
 prix_spot=100)
@@ -172,29 +172,37 @@ arbre = Arbre(nb_pas_arbre, market, option, pruning = True)
 arbre.pricer_arbre()
 print(f"Prix option {arbre.prix_option}")
 
+###### test unique
 pricer = LSM_method(option)
+brownian = Brownian(period, int((end_date - start_date).days / 2), 10000, 1)
+price, std_error = pricer.LSM(brownian, market, method='vector', antithetic=False,poly_degree=2, model_type="polynomial")
+print("Prix Vecteur polynomial degree 2 : ", price)
 
-
+###### test boucle
 from itertools import product
-liste_chemin = [10000*i for i in range(1,11)]
-liste_pas_chemin = [(int((end_date - start_date).days / 2),x) for x in liste_chemin]
-liste_pas = [10*i for i in range(1,31)]
-
+liste_chemin = [10000 * i for i in range(1, 11)]
+liste_pas_chemin = [(10000 * i, int((end_date - start_date).days / 2)) for i in range(1, 11)]
+liste_pas = [10 * i for i in range(1, 31)]
 combinations = list(product(liste_chemin,liste_pas))
-combinations2 = list(product(liste_pas_chemin, liste_chemin))
 dico_price = {}
-for (path,pas) in combinations:
-    brownian = Brownian(period, pas, path, 1)
-    price, std_error, intervalle = pricer.LSM(brownian, market, method='vector', antithetic=True, poly_degree=2, model_type="polynomial")
-    # print("Prix Vecteur polynomial degree 2 : ", price)
-    # print(int(arbre.prix_option * 100) / 100, int(price * 100) / 100)
-    if int(arbre.prix_option * 100) / 100 == int(price * 100) / 100 and intervalle[0] <= arbre.prix_option <= intervalle[1]:# and std_error < 0.01:
-        dico_price[(pas,path)] = {'price': round(price, 4) ,'ecart-type': round(std_error, 4), 
-        'min': round(intervalle[0], 4), 'max':round(intervalle[1], 4)}
-        break
-    print(pas,path, price)
-    
-print(dico_price)
+
+def test_boucle(combi):
+    for (path,pas) in combi:
+        brownian = Brownian(period, pas, path, 1)
+        price, std_error, intervalle = pricer.LSM(brownian, market, method='vector', antithetic=True, poly_degree=2, model_type="polynomial")
+        if intervalle[0] <= arbre.prix_option <= intervalle[1]:
+            if int(arbre.prix_option * 100) / 100 == int(price * 100) / 100:# and std_error < 0.01:
+                dico_price[(pas,path)] = {'vrai prix': arbre.prix_option,'price': round(price, 4) ,'ecart-type': round(std_error, 4), 
+                'min': round(intervalle[0], 4), 'max':round(intervalle[1], 4), 'proche': "✅    "}
+                break
+            if int(price * 100) / 100 - 0.01 <= int(arbre.prix_option * 100) / 100 <= int(price * 100) / 100 + 0.01:# and std_error < 0.01:
+                dico_price[(pas,path)] = {'vrai prix': arbre.prix_option,'price': round(price, 4) ,'ecart-type': round(std_error, 4), 
+                'min': round(intervalle[0], 4), 'max':round(intervalle[1], 4),'proche':'❌    '}
+        print(pas,path, price)
+
+test_boucle(combinations)
+test_boucle(liste_pas_chemin)
+print(pd.DataFrame(dico_price))
 
 exit()
 brownian = Brownian(period, int((end_date - start_date).days / 2), 10000, 1)
