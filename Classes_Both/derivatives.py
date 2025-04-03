@@ -147,8 +147,8 @@ class OptionDerivatives:
         self.option.maturity = params["maturity"]
 
         period = (self.option.maturite - self.option.date_pricing).days / 365
-        print("Period : ", period)
-        print(self.option.maturity)
+        # print("Period : ", period)
+        # print(self.option.maturity)
         brownian = Brownian(period, 200, 100000, 1)
         pricer = LSM_method(self.option)
 

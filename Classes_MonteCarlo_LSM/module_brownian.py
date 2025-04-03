@@ -9,7 +9,7 @@ class Brownian:
         self.step = time_to_maturity / self.nb_step
         self.seed = seed
         # self._generator : np.random.Generator = np.random.default_rng(self.seed)
-        print(self.seed)
+        # print(self.seed)
         np.random.seed(self.seed)
 
     def Scalaire(self):
@@ -19,7 +19,6 @@ class Brownian:
             uniform_samples = np.random.uniform(0, 1)
             W[i] = W[i-1]+stats.norm.ppf(uniform_samples) * np.sqrt(self.step)
         return W
-
 
     def Vecteur(self):
         # Génération vectorielle des mouvements browniens
