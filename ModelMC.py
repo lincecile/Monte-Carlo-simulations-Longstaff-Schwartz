@@ -181,22 +181,22 @@ period = (end_date - start_date).days / 365
 #print("Prix Vecteur : ", priceV4)
 #print("Prix Vecteur : ", priceV2, priceV3, priceV4,priceV5)
 
-option_deriv = OptionDerivatives(option, market)  
-print("Prix :", option_deriv.price(option_deriv.parameters))
-print("Delta :", option_deriv.delta())
-print("Vega :", option_deriv.vega()/100)
-print("Theta :", option_deriv.theta()/100)
-print("Gamma :", option_deriv.gamma())
+# option_deriv = OptionDerivatives(option, market)  
+# print("Prix :", option_deriv.price(option_deriv.parameters))
+# print("Delta :", option_deriv.delta())
+# print("Vega :", option_deriv.vega()/100)
+# print("Theta :", option_deriv.theta()/100)
+# print("Gamma :", option_deriv.gamma())
 
 
 
 # Create a pricing engine for this option
-#pricer = LSM_method(option)
+pricer = LSM_method(option)
 # Use pricing methods
-#brownian = Brownian(period, 10, 10000, 1)
+brownian = Brownian(period, 251, 100000, 1)
 print('ici')
-#price, std_error = pricer.LSM(brownian, market, method='vector')
-#print("Prix Vecteur2 : ", price)
+price, std_error = pricer.LSM(brownian, market, method='vector',antithetic=True)
+print("Prix Vecteur2 : ", price)
 
 #plot_mc_intervals2(option,market)
 
