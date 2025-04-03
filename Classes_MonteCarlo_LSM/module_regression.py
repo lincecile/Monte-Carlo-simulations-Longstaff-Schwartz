@@ -1,5 +1,5 @@
 from sklearn.linear_model import LinearRegression
-from numpy.polynomial import Polynomial, Laguerre, Hermite
+from numpy.polynomial import Polynomial, Laguerre, Hermite, Legendre, Chebyshev
 import numpy as np
 
 class RegressionEstimator:
@@ -23,6 +23,16 @@ class RegressionEstimator:
         elif self.model_type == "hermite":
             coeffs = np.polynomial.hermite.hermfit(self.X, self.Y, self.degree)
             linreg = Hermite(coeffs)
+            return linreg(self.X)
+        
+        elif self.model_type == "legendre":
+            coeffs = np.polynomial.legendre.legfit(self.X, self.Y, self.degree)
+            linreg = Legendre(coeffs)
+            return linreg(self.X)  
+        
+        elif self.model_type == "chebyshev":
+            coeffs = np.polynomial.chebyshev.chebfit(self.X, self.Y, self.degree)
+            linreg = Chebyshev(coeffs)
             return linreg(self.X)  
 
         elif self.model_type == "linear":

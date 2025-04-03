@@ -146,28 +146,29 @@ class LSM_method :
         # Valeur de l'option européenne
         if not self.option.americaine:
             val_intriseque = val_intriseque * np.exp(-market.taux_interet * self.option.maturity)
-            prix, std_prix = self.calculate_price_statistics(val_intriseque, len(val_intriseque), antithetic_info, euro_americain_info, method)
-            return (prix, std_prix)
+            prix, std_prix, intervalle = self.calculate_price_statistics(val_intriseque, len(val_intriseque), antithetic_info, euro_americain_info, method)
+            return (prix, std_prix, intervalle)
         
         # Vecteur des cash flows
         CF_Vect = val_intriseque.copy()
         CF_Vect = self.lsm_algorithm(CF_Vect, Spot_simule, brownian, market, poly_degree, model_type)
 
         if not antithetic:
-            prix, std_prix = self.calculate_price_statistics(CF_Vect, len(CF_Vect), antithetic_info, euro_americain_info, method)
-            return (prix, std_prix)
+            prix, std_prix, intervalle = self.calculate_price_statistics(CF_Vect, len(CF_Vect), antithetic_info, euro_americain_info, method)
+            return (prix, std_prix, intervalle)
         
         moitie = len(CF_Vect) // 2
         CF_vect_final = (CF_Vect[:moitie] + CF_Vect[moitie:]) / 2
-        prix, std_prix = self.calculate_price_statistics(CF_vect_final, len(CF_vect_final), antithetic_info, euro_americain_info, method)
+        prix, std_prix, intervalle = self.calculate_price_statistics(CF_vect_final, len(CF_vect_final), antithetic_info, euro_americain_info, method)
         
-        return (prix, std_prix)
+        return (prix, std_prix, intervalle)
 
     def calculate_price_statistics(self, CF_values,  nb_chemins, mode, type_option, method):
         prix = np.mean(CF_values)
         std_prix = np.std(CF_values) / np.sqrt(len(CF_values))
-        print(f"Nb chemins {mode}: {nb_chemins}")
-        print(f"Prix min {mode, type_option, method}: {prix - 2 * std_prix}")
-        print(f"Prix max {mode, type_option, method}: {prix + 2 * std_prix}")
-        return prix, std_prix
+        intervalle = (prix - 2 * std_prix, prix + 2 * std_prix)
+        # print(f"Nb chemins {mode}: {nb_chemins}")
+        # print(f"Prix min {mode, type_option, method}: {prix - 2 * std_prix}")
+        # print(f"Prix max {mode, type_option, method}: {prix + 2 * std_prix}")
+        return prix, std_prix, intervalle
         

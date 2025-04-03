@@ -355,14 +355,14 @@ class Noeud:
         def call_put_payoff() : 
             return self.prix_sj - option.prix_exercice if option.call else option.prix_exercice - self.prix_sj
                     
-        if option.barriere.type_barriere is TypeBarriere.knock_in : 
+        if option.barriere is not None and option.barriere.type_barriere is TypeBarriere.knock_in : 
             if ((option.barriere.direction_barriere is DirectionBarriere.up and self.prix_sj >= option.barriere.niveau_barriere) 
                 or (option.barriere.direction_barriere is DirectionBarriere.down and self.prix_sj <= option.barriere.niveau_barriere)) :
                     payoff = max(min_payoff, call_put_payoff())
             else : 
                 payoff = min_payoff
     
-        elif option.barriere.type_barriere is TypeBarriere.knock_out : 
+        elif option.barriere is not None and option.barriere.type_barriere is TypeBarriere.knock_out : 
             if ((option.barriere.direction_barriere is DirectionBarriere.up and self.prix_sj >= option.barriere.niveau_barriere) 
                 or (option.barriere.direction_barriere is DirectionBarriere.down and self.prix_sj <= option.barriere.niveau_barriere)):
                 payoff = min_payoff
