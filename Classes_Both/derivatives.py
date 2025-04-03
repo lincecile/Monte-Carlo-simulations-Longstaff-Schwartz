@@ -5,6 +5,7 @@ from Classes_Both.module_option import Option
 from Classes_Both.module_marche import DonneeMarche
 from Classes_MonteCarlo_LSM.module_brownian import Brownian
 from Classes_MonteCarlo_LSM.module_LSM import LSM_method
+from Classes_MonteCarlo_LSM.module_LSM import LSM_method
 from copy import deepcopy, copy
 
 """
@@ -130,9 +131,10 @@ class OptionDerivatives:
         parameters (OptionDerivativesParameters): The parameters of the option.
         pricer_options (dict): Other options for the pricer
     """
-    def __init__(self, option: Option, market: DonneeMarche):
+    def __init__(self, option: Option, market: DonneeMarche, pricer : LSM_method):
         self.option = deepcopy(option)
         self.market = deepcopy(market)
+        self.pricer = pricer
         self.parameters = OptionDerivativesParameters(option, market)
         
     def price(self, params: OptionDerivativesParameters):

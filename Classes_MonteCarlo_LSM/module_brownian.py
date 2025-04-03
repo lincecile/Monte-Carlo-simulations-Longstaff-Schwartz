@@ -30,9 +30,7 @@ class Brownian:
         # Construction du mouvement brownien
         W = np.zeros((self.nb_trajectoire, self.nb_step+1))
         W[:, 1:] = np.cumsum(dW, axis=1)
-        
-        timedelta = np.array([self.step * i for i in range(self.nb_step+1)])
-        
-        return W, timedelta
+                
+        return W
 
 
