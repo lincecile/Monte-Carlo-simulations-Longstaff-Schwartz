@@ -8,16 +8,16 @@ from Classes_TrinomialTree.module_arbre_noeud import Arbre
 #%% Classes
     
 class BlackAndScholes : 
-    def __init__(self, arbre : Arbre):
+    def __init__(self, modele):
         
-        self.option = arbre.option
+        self.option = modele.option
         self.is_european = not self.option.americaine
         self.type_option = "Call" if self.option.call else "Put"
-        self.prix_sj = arbre.donnee_marche.prix_spot
+        self.prix_sj = modele.donnee_marche.prix_spot
         self.strike = self.option.prix_exercice
-        self.risk_free = arbre.donnee_marche.taux_interet
-        self.maturite = arbre.get_temps()
-        self.volatilite = arbre.donnee_marche.volatilite
+        self.risk_free = modele.donnee_marche.taux_interet
+        self.maturite = modele.get_temps()
+        self.volatilite = modele.donnee_marche.volatilite
         
         if not self.is_european : 
             raise ValueError("Black and Scholes n'est applicable que dans le cas d'options européennes.")
