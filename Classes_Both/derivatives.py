@@ -5,6 +5,7 @@ from Classes_Both.module_option import Option
 from Classes_Both.module_marche import DonneeMarche
 from Classes_MonteCarlo_LSM.module_brownian import Brownian
 from Classes_MonteCarlo_LSM.module_LSM import LSM_method
+from Classes_MonteCarlo_LSM.module_LSM import LSM_method
 from copy import deepcopy, copy
 
 """
@@ -146,10 +147,13 @@ class OptionDerivatives:
         self.option.maturity = params["maturity"]
 
         period = (self.option.maturite - self.option.date_pricing).days / 365
-        brownian = Brownian(period, 10, 1000000, 1)
+        print("Period : ", period)
+        print(self.option.maturity)
+        brownian = Brownian(period, 200, 100000, 1)
+        pricer = LSM_method(self.option)
 
         # Pricing avec LSM
-        return self.pricer.LSM(brownian, self.market, method='vector', antithetic=True)
+        return pricer.LSM(brownian, self.market, method='vector')
 
 
     def delta(self): 
@@ -159,7 +163,7 @@ class OptionDerivatives:
         return OneDimDerivative(self.price, self.parameters, shift=0.01).first("sigma")
     
     def theta(self):
-        return OneDimDerivative(self.price, self.parameters, shift=1/365).first("maturity")
+        return -OneDimDerivative(self.price, self.parameters, shift=1/365).first("maturity")
     
     def gamma(self):
         return TwoDimDerivatives(self.price, self.parameters).second("price", "price")
