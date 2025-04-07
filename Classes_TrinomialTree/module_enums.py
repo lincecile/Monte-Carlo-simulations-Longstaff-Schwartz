@@ -18,3 +18,18 @@ class TypeBarriere(Enum) :
 class DirectionBarriere(Enum) : 
     up = "Up"
     down = "Down"
+
+class MethodeCalcul(Enum) : 
+    vector = "Vectorielle"
+    scalar = "Scalaire"
+
+class RegType(Enum) : 
+    polynomial = "Polynomial"
+    laguerre = "Laguerre"
+    hermite = "Hermite"
+    legendre = "Legendre"
+    chebyshev = "Chebyshev"
+    linear = "Linear"
+    logarithmic = "Logarithmic"
+    exponential = "Exponential"
+            
