@@ -233,8 +233,11 @@ with tab1:
 
         start = time.time()
         with st.spinner('''Valorisation de l'option en cours...''') : 
-            price, std_error, intevalles = pricer.LSM(brownian, donnee_marche, method=calcul_method, 
-                                                      antithetic=antithetic_choice,poly_degree=poly_degree, model_type=regress_method)
+
+            price, std_error, intevalles = pricer.LSM(brownian, donnee_marche, 
+                                                      method= 'vector' if calcul_method == 'Vectorielle' else 'scalar', 
+                                                      antithetic = antithetic_choice,
+                                                      poly_degree=poly_degree, model_type=regress_method)
         end = time.time()
         time_difference = round(end - start, 1)
         prix_option = f"{round(price, 2)}€"

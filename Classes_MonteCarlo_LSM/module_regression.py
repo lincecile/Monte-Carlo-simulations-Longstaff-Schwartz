@@ -3,48 +3,49 @@ from numpy.polynomial import Polynomial, Laguerre, Hermite, Legendre, Chebyshev
 import numpy as np
 
 class RegressionEstimator:
-    def __init__(self, X, Y, degree=2, model_type="polynomial"):
+    def __init__(self, X, Y, degree=2, model_type="Polynomial"):
         self.X = X
         self.Y = Y
         self.degree = degree
         self.model_type = model_type
 
+
     def Regression(self):
-        if self.model_type == "polynomial":
+        if self.model_type == "Polynomial":
             coeffs = np.polynomial.polynomial.polyfit(self.X, self.Y, self.degree)
             linreg = Polynomial(coeffs)
             return linreg(self.X)  
         
-        elif self.model_type == "laguerre":
+        elif self.model_type == "Laguerre":
             coeffs = np.polynomial.laguerre.lagfit(self.X, self.Y, self.degree)
             linreg = Laguerre(coeffs)
             return linreg(self.X)  
 
-        elif self.model_type == "hermite":
+        elif self.model_type == "Hermite":
             coeffs = np.polynomial.hermite.hermfit(self.X, self.Y, self.degree)
             linreg = Hermite(coeffs)
             return linreg(self.X)
         
-        elif self.model_type == "legendre":
+        elif self.model_type == "Legendre":
             coeffs = np.polynomial.legendre.legfit(self.X, self.Y, self.degree)
             linreg = Legendre(coeffs)
             return linreg(self.X)  
         
-        elif self.model_type == "chebyshev":
+        elif self.model_type == "Chebyshev":
             coeffs = np.polynomial.chebyshev.chebfit(self.X, self.Y, self.degree)
             linreg = Chebyshev(coeffs)
             return linreg(self.X)  
 
-        elif self.model_type == "linear":
+        elif self.model_type == "Linear":
             coeffs = np.polyfit(self.X, self.Y, 1)
             return np.polyval(coeffs, self.X)
         
-        elif self.model_type == "logarithmic":
+        elif self.model_type == "Logarithmic":
             log_X = np.log(self.X)
             coeffs = np.polyfit(log_X, self.Y, 1)
             return np.polyval(coeffs, log_X)
 
-        elif self.model_type == "exponential":
+        elif self.model_type == "Exponential":
             log_Y = np.log(self.Y)
             coeffs = np.polyfit(self.X, log_Y, 1)
             return np.exp(np.polyval(coeffs, self.X))
