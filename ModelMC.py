@@ -10,6 +10,54 @@ from Classes_TrinomialTree.module_arbre_noeud import Arbre
 import matplotlib.pyplot as plt
 import pandas as pd
 
+# Exemple d'utilisation
+from Classes_MonteCarlo_LSM.module_graphique_prix import LSMGraph
+
+
+### TEST ###
+start_date = dt.datetime(2024, 1, 1)
+end_date = dt.datetime(2026, 1, 1)
+
+market = DonneeMarche(date_debut= start_date,
+volatilite=0.18, 
+taux_interet=0.03, 
+taux_actualisation=0.03,
+# dividends=[{"ex_div_date": dt.datetime(2024, 4, 21), "amount": 3, "rate": 0}], 
+dividende_ex_date = dt.datetime(2025, 1, 1),
+dividende_montant = 2,
+dividende_rate=0,
+prix_spot=110)
+
+option = Option(date_pricing=start_date, 
+                maturite=end_date, 
+                prix_exercice=107, call=True, americaine=True)
+
+pricer = LSM_method(option)
+
+# nombre d'année entre début et fin 
+period = (end_date - start_date).days / 365
+brownian = Brownian(period, int((end_date - start_date).days / 2), 10000, 1)
+price, std_error, intevalles = pricer.LSM(brownian, market, method='vector', antithetic=False,poly_degree=2, model_type="Polynomial")
+print("Prix Vecteur polynomial degree 2 : ", price)
+
+trajectoires = pricer.Price(market, brownian, method='vector', antithetic=False)
+
+# Initialisation de la classe avec les objets option et marché
+lsm_graph = LSMGraph(option=option, market=market)
+
+# Pour afficher uniquement les trajectoires de prix
+fig_prix = lsm_graph.afficher_trajectoires_prix(trajectoires, brownian)
+fig_prix.show()
+
+# Pour afficher uniquement les mouvements browniens
+fig_brownian = lsm_graph.afficher_mouvements_browniens(brownian)
+fig_brownian.show()
+
+# Pour afficher les deux graphiques côte à côte
+fig_combinee = lsm_graph.afficher_deux_graphiques(trajectoires, brownian)
+fig_combinee.show()
+
+exit()
 def plot_mc_intervals(option, market):
     """
     Affiche le prix d'une option pour différentes valeurs de seeds en incluant un intervalle de confiance.
@@ -41,7 +89,7 @@ def plot_mc_intervals(option, market):
         pricer = LSM_method(option)
         brownian = Brownian(period, 200, 1000, 1)
         start_time_vector = time.time()
-        price, std_error = pricer.LSM(brownian, market, method=method)
+        price, std_error, intervall = pricer.LSM(brownian, market, method=method)
         end_time_vector = time.time()
         vector_time = end_time_vector - start_time_vector
         vector_times.append(vector_time)
@@ -146,31 +194,12 @@ def plot_mc_intervals2(option, market):
     plt.show()
 
 
-### TEST ###
-start_date = dt.datetime(2024, 1, 1)
-end_date = dt.datetime(2026, 1, 1)
 
-market = DonneeMarche(date_debut= start_date,
-volatilite=0.2, 
-taux_interet=0.15, 
-taux_actualisation=0.15,
-# dividends=[{"ex_div_date": dt.datetime(2024, 4, 21), "amount": 3, "rate": 0}], 
-dividende_ex_date = dt.datetime(2024, 4, 21),
-dividende_montant = 0,
-dividende_rate=0,
-prix_spot=100)
 
-option = Option(date_pricing=start_date, 
-                maturite=end_date, 
+plot_mc_intervals(option, market)
 
-                prix_exercice=90, call=False, americaine=True)
+exit()
 
-period = (end_date - start_date).days / 365
-
-nb_pas_arbre = 300
-arbre = Arbre(nb_pas_arbre, market, option, pruning = True)
-arbre.pricer_arbre()
-print(f"Prix option {arbre.prix_option}")
 
 ###### test unique
 pricer = LSM_method(option)
@@ -205,9 +234,7 @@ test_boucle(liste_pas_chemin)
 print(pd.DataFrame(dico_price))
 
 exit()
-brownian = Brownian(period, int((end_date - start_date).days / 2), 10000, 1)
-price, std_error = pricer.LSM(brownian, market, method='vector', antithetic=False,poly_degree=2, model_type="polynomial")
-print("Prix Vecteur polynomial degree 2 : ", price)
+
 
 brownian = Brownian(period, int((end_date - start_date).days / 2), 10000, 1)
 price, std_error = pricer.LSM(brownian, market, method='vector', antithetic=True,poly_degree=2, model_type="polynomial")
