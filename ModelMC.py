@@ -9,9 +9,9 @@ import time
 from Classes_TrinomialTree.module_arbre_noeud import Arbre
 import matplotlib.pyplot as plt
 import pandas as pd
-
+from Classes_MonteCarlo_LSM.module_graph import LSMGraph
 # Exemple d'utilisation
-from Classes_MonteCarlo_LSM.module_graphique_prix import LSMGraph
+
 
 
 ### TEST ###

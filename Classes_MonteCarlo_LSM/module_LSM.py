@@ -139,7 +139,7 @@ class LSM_method :
         
         return CF_Vect
     
-    def LSM(self, brownian: Brownian, market: DonneeMarche, poly_degree=2, model_type="polynomial", method='vector', antithetic: bool=False, print_info=False):
+    def LSM(self, brownian: Brownian, market: DonneeMarche, poly_degree=2, model_type="Polynomial", method='vector', antithetic: bool=False, print_info=False):
         # Prix du sous-jacent simulé
         Spot_simule = self.Price(market, brownian, method=method, antithetic=antithetic)
 
