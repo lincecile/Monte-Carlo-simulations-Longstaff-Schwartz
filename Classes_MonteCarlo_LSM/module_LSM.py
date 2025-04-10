@@ -102,6 +102,12 @@ class LSM_method :
     def compute_intrinsic_value(self, Spot_simule):
         if self.option.call:
             return np.maximum(Spot_simule[:, -1] - self.option.prix_exercice, 0.0)
+            # x = 1 if (Spot_simule[:, -1] > 98) and 99 > Spot_simule[:, -1] else 0
+            # print(pd.DataFrame(Spot_simule[:, -1]))
+            # x = np.where(np.logical_and(Spot_simule[:, -1] > 98, Spot_simule[:, -1] < 99), 1, 0)
+            # print(pd.DataFrame(x))
+            # exit()
+            # return x
         return np.maximum(self.option.prix_exercice - Spot_simule[:, -1], 0.0)
     
     def lsm_algorithm(self, CF_Vect, Spot_simule, brownian, market, poly_degree, model_type):
