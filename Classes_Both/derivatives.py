@@ -185,7 +185,7 @@ class OptionDerivatives:
     
     # Calcul du rho : sensibilité au taux d'intérêt
     def rho(self, brownian: Brownian)-> float:
-        return -OneDimDerivative(self.price, self.parameters, shift=0.01, brownian=brownian).first("r")
+        return OneDimDerivative(self.price, self.parameters, shift=0.01, brownian=brownian).first("r")
     
     # Calcul du gamma : dérivée seconde par rapport au prix
     def gamma(self, brownian: Brownian)-> float:
