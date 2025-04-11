@@ -1,7 +1,7 @@
 #%% Imports
 import datetime as dt
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple, List, Union, Dict, Any, Callable, Type, TypeVar, cast, Literal, Sequence
 
 from Classes_TrinomialTree.module_barriere import Barriere
 
@@ -22,18 +22,18 @@ class LSM_method :
     def __init__(self, option: Option):
         self.option = option
     
-    def underlying_paths(self, S0, taux_interet, sigma, W, timedelta):
+    def underlying_paths(self, S0: float, taux_interet: float, sigma: float, W: np.ndarray, timedelta: np.ndarray) -> np.ndarray:
         """Génère les trajectoires de prix du sous-jacent avec la première colonne initialisée à S0."""
         S = S0 * np.exp((taux_interet - sigma**2/2) * timedelta + sigma * W)
         S[:, 0] = S0
         return S
     
-    def __calcul_position_div(self, market: DonneeMarche, brownian: Brownian):
+    def __calcul_position_div(self, market: DonneeMarche, brownian: Brownian) -> int:
         """Calcule la position du dividende dans l'arbre."""
         nb_jour_detachement = (market.dividende_ex_date - self.option.date_pricing).days
         return nb_jour_detachement / 365 / brownian.step
     
-    def adjust_for_dividends(self, S_T, market, brownian, W, timedelta):
+    def adjust_for_dividends(self, S_T: np.ndarray, market: DonneeMarche, brownian: Brownian, W: np.ndarray, timedelta: np.ndarray) -> None:
         """ Ajuste les trajectoires pour prendre en compte les dividendes. """
         position_div = self.__calcul_position_div(market=market, brownian=brownian)
         position_div = int(position_div) #if np.abs(position_div - int(position_div)) < 0.01 else int(position_div) + 1 
@@ -44,7 +44,8 @@ class LSM_method :
                 (timedelta[position_div + 1:] - timedelta[position_div]) +
                 market.volatilite * (W[:, position_div + 1:] - W[:, position_div][:, np.newaxis]))
 
-    def antithetic_mode(self, S0, taux_interet, sigma, W, timedelta, market, brownian):
+    def antithetic_mode(self, S0: float, taux_interet: float, sigma: float, W: np.ndarray, 
+                        timedelta: np.ndarray, market: DonneeMarche, brownian: Brownian) -> np.ndarray:
         """ Applique la méthode antithétique. """
         W_neg = -W
         S_T_pos = self.underlying_paths(S0, taux_interet, sigma, W, timedelta)
@@ -58,7 +59,8 @@ class LSM_method :
         
         return S_T_antithetic
     
-    def vector_method(self, S0, taux_interet, sigma, q, market, brownian, antithetic):
+    def vector_method(self, S0: float, taux_interet: float, sigma: float, q: float, 
+                      market: DonneeMarche, brownian: Brownian, antithetic: bool) -> np.ndarray:
         """ Calcule les trajectoires avec la méthode vectorielle. """
         W = brownian.Vecteur()
         timedelta = np.array([brownian.step * i for i in range(brownian.nb_step+1)])
@@ -72,7 +74,8 @@ class LSM_method :
 
         return S_T
     
-    def scalar_method(self, S0, taux_interet, sigma, q, T, market, brownian):
+    def scalar_method(self, S0: float, taux_interet: float, sigma: float, q: float, 
+                      T: float, market: DonneeMarche, brownian: Brownian) -> np.ndarray:
         """ Calcule les trajectoires avec la méthode scalaire. """
         S_T = np.ones((brownian.nb_trajectoire, brownian.nb_step+1)) * S0
         position_div = self.__calcul_position_div(market, brownian)
@@ -84,7 +87,7 @@ class LSM_method :
                     S_T[i, j] -= market.dividende_montant
         return S_T
     
-    def Price(self, market: DonneeMarche, brownian: Brownian, method: str = 'vector', antithetic: bool = False):
+    def Price(self, market: DonneeMarche, brownian: Brownian, method: str = 'vector', antithetic: bool = False) -> np.ndarray:
         """
         Calcule le val_intriseque de l'option en utilisant un mouvement brownien.
         """
@@ -99,7 +102,7 @@ class LSM_method :
         else:
             return self.scalar_method(S0, taux_interet, sigma, q, T, market, brownian)
 
-    def compute_intrinsic_value(self, Spot_simule):
+    def compute_intrinsic_value(self, Spot_simule: np.ndarray) -> np.ndarray:
         if self.option.call:
             return np.maximum(Spot_simule[:, -1] - self.option.prix_exercice, 0.0)
             # x = 1 if (Spot_simule[:, -1] > 98) and 99 > Spot_simule[:, -1] else 0
@@ -110,7 +113,9 @@ class LSM_method :
             # return x
         return np.maximum(self.option.prix_exercice - Spot_simule[:, -1], 0.0)
     
-    def lsm_algorithm(self, CF_Vect, Spot_simule, brownian, market, poly_degree, model_type):
+    def lsm_algorithm(self, CF_Vect: np.ndarray, Spot_simule: np.ndarray, brownian: Brownian, 
+                      market: DonneeMarche, poly_degree: int, model_type: str) -> np.ndarray:
+        
 
         for t in range(brownian.nb_step - 1, 0, -1): 
             
@@ -139,7 +144,9 @@ class LSM_method :
         
         return CF_Vect
     
-    def LSM(self, brownian: Brownian, market: DonneeMarche, poly_degree=2, model_type="Polynomial", method='vector', antithetic: bool=False, print_info=False):
+    def LSM(self, brownian: Brownian, market: DonneeMarche, poly_degree: int = 2, 
+            model_type: str = "Polynomial", method: str = 'vector', 
+            antithetic: bool = False, print_info: bool = False) -> Tuple[float, float, Tuple[float, float]]:
         # Prix du sous-jacent simulé
         Spot_simule = self.Price(market, brownian, method=method, antithetic=antithetic)
 
@@ -169,7 +176,9 @@ class LSM_method :
         
         return (prix, std_prix, intervalle)
 
-    def calculate_price_statistics(self, CF_values,  nb_chemins, mode, type_option, method, print_info=False):
+    def calculate_price_statistics(self, CF_values: np.ndarray, nb_chemins: int, 
+                                  mode: str, type_option: str, method: str, 
+                                  print_info: bool = False) -> Tuple[float, float, Tuple[float, float]]:
         prix = np.mean(CF_values)
         std_prix = np.std(CF_values) / np.sqrt(len(CF_values))
         intervalle = (prix - 2 * std_prix, prix + 2 * std_prix)

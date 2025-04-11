@@ -5,7 +5,7 @@ import numpy as np
 
 from Classes_Both.module_marche import DonneeMarche
 from Classes_Both.module_option import Option
-from Classes_TrinomialTree.module_enums import ConventionBaseCalendaire, TypeBarriere, DirectionBarriere
+from Classes_Both.module_enums import ConventionBaseCalendaire, TypeBarriere, DirectionBarriere
 
 #%%Constantes
 

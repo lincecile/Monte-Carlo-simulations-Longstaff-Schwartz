@@ -24,8 +24,13 @@ from Classes_TrinomialTree.module_barriere import Barriere
 from Classes_TrinomialTree.module_arbre_noeud import Arbre
 
 # import des fonctions Black Scholes
-from Classes_TrinomialTree.module_black_scholes import BlackAndScholes
+from Classes_Both.module_black_scholes import BlackAndScholes
+from Classes_Both.module_black_scholes import BlackAndScholes
 
+from Classes_MonteCarlo_LSM.module_brownian import Brownian
+from Classes_MonteCarlo_LSM.module_LSM import LSM_method
+from copy import deepcopy
+ 
 #%% Classes
 
 class BsComparison:
@@ -269,19 +274,23 @@ class BsComparison:
     
 class StrikeComparison:
     
-    def __init__(self, max_cpu :int, step_list: list, strike_values: list):
+    def __init__(self, max_cpu: int, step_list: list, strike_values: list,
+                 donnee_marche: DonneeMarche, brownian: Brownian, option: Option):
         self.max_cpu = max_cpu
-        
         self.step_list = step_list
         self.strike_values = strike_values
+        self.donnee_marche = donnee_marche
+        self.brownian = brownian
+        self.option = option
 
         self.barriere = Barriere(0, None, None)
-        self.donnee_marche = DonneeMarche(dt.date(2024, 1, 13), 100, 0.20, 0.02, 0.02, dt.date.today(), 0)
-        
         self.results_df = pd.DataFrame()
 
         with concurrent.futures.ProcessPoolExecutor(max_workers=self.max_cpu) as outer_executor:
-            futures = {outer_executor.submit(self.calculate_for_strike, strike): strike for strike in self.strike_values}
+            futures = {
+                outer_executor.submit(self.calculate_for_strike, strike): strike
+                for strike in self.strike_values
+            }
 
             for future in concurrent.futures.as_completed(futures):
                 strike = futures[future]
@@ -293,94 +302,109 @@ class StrikeComparison:
                     print(f'Error at strike {strike}: {exc}')
 
     def calculate_for_strike(self, strike):
-        option = Option(dt.date(2024, 10, 23), prix_exercice=strike, barriere=self.barriere, 
-                        americaine=False, call=True, date_pricing=dt.date(2024, 1, 13))
-
-        self.arbre_bs = Arbre(100, self.donnee_marche, option)
-        self.bs_price = BlackAndScholes(self.arbre_bs).bs_pricer()
-
-        liste_prix_step_comparison = []
-        liste_temps_step_comparison = []
-        liste_diff_bs = []
-        liste_time_gap_bs = []
-
-        with concurrent.futures.ProcessPoolExecutor(max_workers=self.max_cpu) as inner_executor:
-            futures = {
-                inner_executor.submit(self.calcule_pas, step, self.bs_price, self.donnee_marche, option): step 
-                for step in self.step_list
-            }
-
-            for future in concurrent.futures.as_completed(futures):
-                result = future.result()
-                liste_prix_step_comparison.append(result[1])
-                liste_temps_step_comparison.append(result[2])
-                liste_diff_bs.append(result[3])
-                liste_time_gap_bs.append(result[4])
-        
-        return pd.DataFrame({
-            "Nombre de pas": self.step_list,
-            "Prix arbre trinomial": liste_prix_step_comparison,
-            "Temps pricing": liste_temps_step_comparison,
-            "Différence B&S": liste_diff_bs,
-            "Différence * nb pas": liste_time_gap_bs,
-        })
-
-    @staticmethod
-    def calcule_pas(step, bs_price, donnee_marche, option):
-        now = time.time()
-        arbre_step_comparison = Arbre(step, donnee_marche, option)
-        arbre_step_comparison.pricer_arbre()
-        price_arbre_step_comparison = arbre_step_comparison.prix_option
-        then = time.time()
-        pricing_time = then - now
-        print(f"Strike: {option.prix_exercice}, Prix option : {price_arbre_step_comparison}, Pricing Time: {pricing_time:.4f}s")
-        return (step, price_arbre_step_comparison, pricing_time, 
-                price_arbre_step_comparison - bs_price, 
-                price_arbre_step_comparison * step)
-        
-    def graph_strike_temps_pas(self): 
-        fig = go.Figure()
-        
-        sorted_df = self.results_df.sort_values('Strike', ascending=True)
-
-        fig.add_trace(go.Scatter(
-            x=sorted_df["Strike"],
-            y=sorted_df["Différence B&S"],
-            mode='lines+markers',
-            line=dict(color='blue', width=2),
-            marker=dict(size=6)
-        ))
-        
-        fig.add_hline(
-            y=0,
-            line_dash="dash",
-            line_color="red"
+        option = Option(
+            date_pricing=self.option.date_pricing,
+            maturite=self.option.maturite,
+            prix_exercice=strike,
+            barriere=self.barriere,
+            americaine=False,
+            call=True  # ou True selon le besoin
         )
+
+        arbre_bs = Arbre(100, self.donnee_marche, option)
+        bs_price = BlackAndScholes(arbre_bs).bs_pricer()
+
+        step_results = []
+
+        for step in self.step_list:
+            res = self.calcule_pas(step, bs_price, self.donnee_marche, option)
+            step_results.append(res)
+
+        return pd.DataFrame(step_results)
+
+    def calcule_pas(self, step, bs_price, donnee_marche, option):
+        # Prix arbre trinomial
+        now_tree = time.time()
+        arbre = Arbre(100, donnee_marche, option)
+        arbre.pricer_arbre()
+        prix_arbre = arbre.prix_option
+        time_tree = time.time() - now_tree
+
+        # Prix LSM
+        now_lsm = time.time()
+        pricer_lsm = LSM_method(option)
+        prix_lsm, std_err, _ = pricer_lsm.LSM(
+            self.brownian, donnee_marche,
+            method='vector')
+        time_lsm = time.time() - now_lsm
+        print('strike en cours:', option.prix_exercice)
+        return {
+            "Nombre de pas": step,
+            "Prix arbre trinomial": prix_arbre,
+            "Temps arbre": time_tree,
+            "Diff arbre - B&S": prix_arbre - bs_price,
+
+            "Prix LSM": prix_lsm,
+            "Temps LSM": time_lsm,
+            "Diff LSM - B&S": prix_lsm - bs_price,
+
+            "Diff arbre * nb pas": (prix_arbre - bs_price) * 100,
+            "Diff LSM * nb pas": (prix_lsm - bs_price) * step,
+        }
+
+    def graph_strike_comparison(self):
+        fig = go.Figure()
+        sorted_df = self.results_df.sort_values('Strike')
+
+        for step in self.step_list:
+            df_step = sorted_df#[sorted_df['Strike'] == step]
+
+            fig.add_trace(go.Scatter(
+                x=df_step["Strike"],
+                y=df_step["Diff arbre - B&S"],
+                mode='lines+markers',
+                name=f'Arbre (pas={100})',
+                line=dict(dash='solid')
+            ))
+
+            fig.add_trace(go.Scatter(
+                x=df_step["Strike"],
+                y=df_step["Diff LSM - B&S"],
+                mode='lines+markers',
+                name=f'LSM (pas={step})',
+                line=dict(dash='dot')
+            ))
+
+        fig.add_hline(y=0, line_dash="dash", line_color="red")
 
         fig.update_layout(
-            title='Différence par rapport au pricing B&S en fonction du strike',
+            title='Comparaison (Arbre vs LSM) avec Black-Scholes en fonction du Strike',
             xaxis_title='Strike',
-            yaxis_title='Différence B&S',
+            yaxis_title='Différence par rapport à Black-Scholes',
+            legend_title='Méthodes'
         )
-        
+
         return fig
     
 class VolComparison:
     
-    def __init__(self, max_cpu : int, step_list: list, vol_values: list):
-        self.max_cpu=max_cpu
-        
+    def __init__(self, max_cpu: int, step_list: list, vol_values: list,
+                 donnee_marche: DonneeMarche, brownian: Brownian, option: Option):
+        self.max_cpu = max_cpu
         self.step_list = step_list
         self.vol_values = vol_values
+        self.donnee_marche = donnee_marche
+        self.brownian = brownian
+        self.option = option
 
         self.barriere = Barriere(0, None, None)
-        self.option = Option(dt.date(2024, 10, 23), prix_exercice=101, barriere=self.barriere, 
-                        americaine=False, call=True, date_pricing=dt.date(2024, 1, 13))
-        
         self.results_df = pd.DataFrame()
 
         with concurrent.futures.ProcessPoolExecutor(max_workers=self.max_cpu) as outer_executor:
-            futures = {outer_executor.submit(self.calculate_for_vol, vol): vol for vol in self.vol_values}
+            futures = {
+                outer_executor.submit(self.calculate_for_vol, vol): vol
+                for vol in self.vol_values
+            }
 
             for future in concurrent.futures.as_completed(futures):
                 vol = futures[future]
@@ -392,172 +416,210 @@ class VolComparison:
                     print(f'Error at vol {vol}: {exc}')
 
     def calculate_for_vol(self, vol):
-        donnee_marche = DonneeMarche(dt.date(2024, 1, 13), 100, vol, 0.02, 0.02, dt.date.today(), 0)
-
-        self.arbre_bs = Arbre(100, donnee_marche, self.option)
-        self.bs_price = BlackAndScholes(self.arbre_bs).bs_pricer()
-
-        liste_prix_step_comparison = []
-        liste_temps_step_comparison = []
-        liste_diff_bs = []
-        liste_time_gap_bs = []
-
-        with concurrent.futures.ProcessPoolExecutor(max_workers=self.max_cpu) as inner_executor:
-            futures = {
-                inner_executor.submit(self.calcule_pas, step, self.bs_price, donnee_marche, self.option): step 
-                for step in self.step_list
-            }
-
-            for future in concurrent.futures.as_completed(futures):
-                result = future.result()
-                liste_prix_step_comparison.append(result[1])
-                liste_temps_step_comparison.append(result[2])
-                liste_diff_bs.append(result[3])
-                liste_time_gap_bs.append(result[4])
-        
-        return pd.DataFrame({
-            "Nombre de pas": self.step_list,
-            "Prix arbre trinomial": liste_prix_step_comparison,
-            "Temps pricing": liste_temps_step_comparison,
-            "Différence B&S": liste_diff_bs,
-            "Différence * nb pas": liste_time_gap_bs,
-        })
-
-    @staticmethod
-    def calcule_pas(step, bs_price, donnee_marche, option):
-        now = time.time()
-        arbre_step_comparison = Arbre(step, donnee_marche, option)
-        arbre_step_comparison.pricer_arbre()
-        price_arbre_step_comparison = arbre_step_comparison.prix_option
-        then = time.time()
-        pricing_time = then - now
-        print(f"Vol: {donnee_marche.volatilite}, Prix option : {price_arbre_step_comparison}, Pricing Time: {pricing_time:.4f}s")
-        return (step, price_arbre_step_comparison, pricing_time, 
-                price_arbre_step_comparison - bs_price, 
-                price_arbre_step_comparison * step)
-        
-    def graph_vol_temps_pas(self): 
-        fig = go.Figure()
-        
-        sorted_df = self.results_df.sort_values('Volatilité', ascending=True)
-
-        fig.add_trace(go.Scatter(
-            x=sorted_df["Volatilité"],
-            y=sorted_df["Différence B&S"],
-            mode='lines+markers',
-            line=dict(color='blue', width=2),
-            marker=dict(size=6)
-        ))
-        
-        fig.add_hline(
-            y=0,
-            line_dash="dash",
-            line_color="red"
+        # Met à jour la volatilité du marché
+        donnee_marche = DonneeMarche(
+            date_debut=self.option.date_pricing,
+            prix_spot=self.donnee_marche.prix_spot,
+            volatilite=vol,
+            taux_interet=self.donnee_marche.taux_interet,
+            taux_actualisation=self.donnee_marche.taux_actualisation,
+            dividende_ex_date=self.donnee_marche.dividende_ex_date,
+            dividende_montant=self.donnee_marche.dividende_montant,
+            dividende_rate=self.donnee_marche.dividende_rate
         )
+
+        # Calcul Black-Scholes avec l'arbre trinomial
+        arbre_bs = Arbre(100, donnee_marche, self.option)
+        bs_price = BlackAndScholes(arbre_bs).bs_pricer()
+
+        step_results = []
+
+        for step in self.step_list:
+            res = self.calcule_pas(step, bs_price, donnee_marche, self.option)
+            step_results.append(res)
+
+        return pd.DataFrame(step_results)
+
+    def calcule_pas(self, step, bs_price, donnee_marche, option):
+        # Prix arbre trinomial
+        now_tree = time.time()
+        arbre = Arbre(100, donnee_marche, option)
+        arbre.pricer_arbre()
+        prix_arbre = arbre.prix_option
+        time_tree = time.time() - now_tree
+
+        # Prix LSM
+        now_lsm = time.time()
+        pricer_lsm = LSM_method(option)
+        prix_lsm, std_err, _ = pricer_lsm.LSM(
+            self.brownian, donnee_marche,
+            method='vector')
+        time_lsm = time.time() - now_lsm
+        print('Volatilité en cours:', donnee_marche.volatilite)
+        
+        return {
+            "Nombre de pas": step,
+            "Prix arbre trinomial": prix_arbre,
+            "Temps arbre": time_tree,
+            "Diff arbre - B&S": prix_arbre - bs_price,
+
+            "Prix LSM": prix_lsm,
+            "Temps LSM": time_lsm,
+            "Diff LSM - B&S": prix_lsm - bs_price,
+
+            "Diff arbre * nb pas": (prix_arbre - bs_price) * 100,
+            "Diff LSM * nb pas": (prix_lsm - bs_price) * step,
+        }
+
+    def graph_vol(self):
+        fig = go.Figure()
+        sorted_df = self.results_df.sort_values('Volatilité')
+
+        for step in self.step_list:
+            df_step = sorted_df[sorted_df['Nombre de pas'] == step]
+
+            fig.add_trace(go.Scatter(
+                x=df_step["Volatilité"],
+                y=df_step["Diff arbre - B&S"],
+                mode='lines+markers',
+                name=f'Arbre (pas={100})',
+                line=dict(dash='solid')
+            ))
+
+            fig.add_trace(go.Scatter(
+                x=df_step["Volatilité"],
+                y=df_step["Diff LSM - B&S"],
+                mode='lines+markers',
+                name=f'LSM (pas={step})',
+                line=dict(dash='dot')
+            ))
+
+        fig.add_hline(y=0, line_dash="dash", line_color="red")
 
         fig.update_layout(
-            title='Différence par rapport au pricing B&S en fonction de la volatilité',
+            title='Comparaison (Arbre vs LSM) avec Black-Scholes en fonction de la Volatilité',
             xaxis_title='Volatilité',
-            yaxis_title='Différence B&S',
+            yaxis_title='Différence par rapport à Black-Scholes',
+            legend_title='Méthodes'
         )
-        
+
         return fig
 
 class RateComparison:
     
-    def __init__(self, max_cpu : int, step_list: list, rate_values: list):
+    def __init__(self, max_cpu: int, step_list: list, rate_values: list,
+                 donnee_marche: DonneeMarche, brownian: Brownian, option: Option):
         self.max_cpu = max_cpu
-        
         self.step_list = step_list
         self.rate_values = rate_values
+        self.donnee_marche = donnee_marche
+        self.brownian = brownian
+        self.option = option
 
         self.barriere = Barriere(0, None, None)
-        self.option = Option(dt.date(2024, 10, 23), prix_exercice=101, barriere=self.barriere, 
-                        americaine=False, call=True, date_pricing=dt.date(2024, 1, 13))
-        
-        
         self.results_df = pd.DataFrame()
 
         with concurrent.futures.ProcessPoolExecutor(max_workers=self.max_cpu) as outer_executor:
-            futures = {outer_executor.submit(self.calculate_for_rate, rate): rate for rate in self.rate_values}
+            futures = {
+                outer_executor.submit(self.calculate_for_rate, rate): rate
+                for rate in self.rate_values
+            }
 
             for future in concurrent.futures.as_completed(futures):
                 rate = futures[future]
                 try:
                     result_df = future.result()
-                    result_df['''Taux d'intérêt'''] = rate
+                    result_df['Taux'] = rate
                     self.results_df = pd.concat([self.results_df, result_df], ignore_index=True)
                 except Exception as exc:
                     print(f'Error at rate {rate}: {exc}')
 
     def calculate_for_rate(self, rate):
-        donnee_marche = DonneeMarche(dt.date(2024, 1, 13), 100, 0.2, rate, rate, dt.date.today(), 0)
-
-        self.arbre_bs = Arbre(100, donnee_marche, self.option)
-        self.bs_price = BlackAndScholes(self.arbre_bs).bs_pricer()
-
-        liste_prix_step_comparison = []
-        liste_temps_step_comparison = []
-        liste_diff_bs = []
-        liste_time_gap_bs = []
-
-        with concurrent.futures.ProcessPoolExecutor(max_workers=self.max_cpu) as inner_executor:
-            futures = {
-                inner_executor.submit(self.calcule_pas, step, self.bs_price, donnee_marche, self.option): step 
-                for step in self.step_list
-            }
-
-            for future in concurrent.futures.as_completed(futures):
-                result = future.result()
-                liste_prix_step_comparison.append(result[1])
-                liste_temps_step_comparison.append(result[2])
-                liste_diff_bs.append(result[3])
-                liste_time_gap_bs.append(result[4])
-        
-        return pd.DataFrame({
-            "Nombre de pas": self.step_list,
-            "Prix arbre trinomial": liste_prix_step_comparison,
-            "Temps pricing": liste_temps_step_comparison,
-            "Différence B&S": liste_diff_bs,
-            "Différence * nb pas": liste_time_gap_bs,
-        })
-
-    @staticmethod
-    def calcule_pas(step, bs_price, donnee_marche, option):
-        now = time.time()
-        arbre_step_comparison = Arbre(step, donnee_marche, option)
-        arbre_step_comparison.pricer_arbre()
-        price_arbre_step_comparison = arbre_step_comparison.prix_option
-        then = time.time()
-        pricing_time = then - now
-        print(f"Taux d'intérêt: {donnee_marche.taux_interet}, Prix option : {price_arbre_step_comparison}, Pricing Time: {pricing_time:.4f}s")
-        return (step, price_arbre_step_comparison, pricing_time, 
-                price_arbre_step_comparison - bs_price, 
-                price_arbre_step_comparison * step)
-        
-    def graph_rate_temps_pas(self): 
-        fig = go.Figure()
-        
-        sorted_df = self.results_df.sort_values('''Taux d'intérêt''', ascending=True)
-
-        fig.add_trace(go.Scatter(
-            x=sorted_df["Taux d'intérêt"],
-            y=sorted_df["Différence B&S"],
-            mode='lines+markers',
-            line=dict(color='blue', width=2),
-            marker=dict(size=6)
-        ))
-        
-        fig.add_hline(
-            y=0,
-            line_dash="dash",
-            line_color="red"
+        # Met à jour les taux d'intérêt dans DonneeMarche
+        donnee_marche = DonneeMarche(
+            date_debut=self.donnee_marche.date_debut,
+            prix_spot=self.donnee_marche.prix_spot,
+            volatilite=self.donnee_marche.volatilite,
+            taux_interet=rate,
+            taux_actualisation=self.donnee_marche.taux_actualisation,
+            dividende_ex_date=self.donnee_marche.dividende_ex_date,
+            dividende_montant=self.donnee_marche.dividende_montant,
+            dividende_rate=self.donnee_marche.dividende_rate
         )
+
+        # Calcul Black-Scholes avec l'arbre trinomial
+        arbre_bs = Arbre(100, donnee_marche, self.option)
+        bs_price = BlackAndScholes(arbre_bs).bs_pricer()
+
+        step_results = []
+
+        for step in self.step_list:
+            res = self.calcule_pas(step, bs_price, donnee_marche, self.option)
+            step_results.append(res)
+
+        return pd.DataFrame(step_results)
+
+    def calcule_pas(self, step, bs_price, donnee_marche, option):
+        # Prix arbre trinomial
+        now_tree = time.time()
+        arbre = Arbre(100, donnee_marche, option)
+        arbre.pricer_arbre()
+        prix_arbre = arbre.prix_option
+        time_tree = time.time() - now_tree
+
+        # Prix LSM
+        now_lsm = time.time()
+        pricer_lsm = LSM_method(option)
+        prix_lsm, std_err, _ = pricer_lsm.LSM(
+            self.brownian, donnee_marche,
+            method='vector')
+        time_lsm = time.time() - now_lsm
+        print('Taux en cours:', donnee_marche.taux_interet)
+        
+        return {
+            "Nombre de pas": step,
+            "Prix arbre trinomial": prix_arbre,
+            "Temps arbre": time_tree,
+            "Diff arbre - B&S": prix_arbre - bs_price,
+
+            "Prix LSM": prix_lsm,
+            "Temps LSM": time_lsm,
+            "Diff LSM - B&S": prix_lsm - bs_price,
+
+            "Diff arbre * nb pas": (prix_arbre - bs_price) * 100,
+            "Diff LSM * nb pas": (prix_lsm - bs_price) * step,
+        }
+
+    def graph_rate(self):
+        fig = go.Figure()
+        sorted_df = self.results_df.sort_values('Taux')
+
+        for step in self.step_list:
+            df_step = sorted_df #[sorted_df['Nombre de pas'] == step]
+
+            fig.add_trace(go.Scatter(
+                x=df_step["Taux"],
+                y=df_step["Diff arbre - B&S"],
+                mode='lines+markers',
+                name=f'Arbre (pas={100})',
+                line=dict(dash='solid')
+            ))
+
+            fig.add_trace(go.Scatter(
+                x=df_step["Taux"],
+                y=df_step["Diff LSM - B&S"],
+                mode='lines+markers',
+                name=f'LSM (pas={step})',
+                line=dict(dash='dot')
+            ))
+
+        fig.add_hline(y=0, line_dash="dash", line_color="red")
 
         fig.update_layout(
-            title='''Différence par rapport au pricing B&S en fonction du taux d'intérêt''',
-            xaxis_title='''Taux d'intérêt''',
-            yaxis_title='Différence B&S',
+            title='Comparaison (Arbre vs LSM) avec Black-Scholes en fonction du Taux',
+            xaxis_title='Taux',
+            yaxis_title='Différence par rapport à Black-Scholes',
+            legend_title='Méthodes'
         )
-        
+
         return fig

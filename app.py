@@ -12,18 +12,21 @@ import warnings
 warnings.filterwarnings("ignore")
 sys.setrecursionlimit(1000000000)
 
-from Classes_TrinomialTree.module_enums import TypeBarriere, DirectionBarriere, ConventionBaseCalendaire, MethodeCalcul, RegType
+from Classes_Both.module_enums import TypeBarriere, DirectionBarriere, ConventionBaseCalendaire, MethodeCalcul, RegType
 from Classes_Both.module_marche import DonneeMarche
 from Classes_Both.module_option import Option
 from Classes_TrinomialTree.module_barriere import Barriere
 from Classes_TrinomialTree.module_arbre_noeud import Arbre
-from Classes_TrinomialTree.module_graphique import ArbreGraph
-from Classes_TrinomialTree.module_pricing_analysis import BsComparison, StrikeComparison, VolComparison, RateComparison
-from Classes_TrinomialTree.module_black_scholes import BlackAndScholes
+from Classes_Both.module_pricing_analysis import StrikeComparison, VolComparison, RateComparison
+from Classes_Both.module_black_scholes import BlackAndScholes
 from Classes_TrinomialTree.module_grecques_empiriques import GrecquesEmpiriques
 
 from Classes_MonteCarlo_LSM.module_brownian import Brownian
 from Classes_MonteCarlo_LSM.module_LSM import LSM_method
+from Classes_MonteCarlo_LSM.module_graph import LSMGraph
+
+from Classes_Both.derivatives import OptionDerivatives, OptionDerivativesParameters
+
 #%% Constantes
 
 today= dt.date.today()
@@ -46,8 +49,7 @@ st.title("LSM Monte Carlo - [ALAOUI Emma](%s), [LIN Cécile](%s)" % (
 ###################### Onglet 1 : Inputs Utilisateur ######################
 ########################################################################### 
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9= st.tabs(["Pricing", "Plus d'options", "Graphique", "Greeks","Comparaison avec Black-Scholes","Comparaison seuil de pruning", "Comparaison strike", "Comparaison volatilité", "Comparaison taux d'intérêt"])
-# tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(["Pricing", "Graphique", "Greeks","Comparaison avec Black-Scholes","Comparaison selon la seed", "Comparaison strike", "Comparaison volatilité", "Comparaison taux d'intérêt"])
+tab1, tab2, tab3, tab4, tabcomparaison = st.tabs(["Pricing", "Plus d'options", "Graphique : Brownien et Sous-Jacent", "Greeks", "Analyse - Comparaison"])
 
 with tab1 :
     
@@ -104,7 +106,7 @@ with tab1 :
         maturite = st.date_input("Entrez une date de maturité :",value=today+ timedelta(days=10))
         
     with col33:
-        barriere_check = st.checkbox("Option à barrière ?", value=False)
+        barriere_check = st.checkbox("Option à barrière ? (uniquement arbre trinomial)", value=False)
         
     col41, col42, col43 = st.columns(3)
         
@@ -175,24 +177,16 @@ with tab2 :
         regress_method = st.selectbox('Choisissez la méthode de regression :', [nombre.value for nombre in RegType])
         seed_choice = st.number_input('Choisissez la seed pour le pricing LSM:', 1, 50000, value=42, step=1)
 
-    with col2:
-        
-        if regress_method in ["Polynomial","Laguerre","Legendre","Chebyshev","Hermite"]:
-            poly_degree = st.number_input("Entrez le degré du polynôme :", 1, 100, value=2, step=1)
-
     with col3:
         calcul_antithetic = st.toggle("Calcul Antithétique", value=False)
         antithetic_choice = False
         if calcul_antithetic : 
             antithetic_choice = True
             st.markdown("Calcul antithétique activé")
-        
-        auto_pas_chemin = st.toggle("Choix automatique du nombre de pas et de chemins", value=False)
-        auto_pas_chemin_choice = False
-        if auto_pas_chemin : 
-            auto_pas_chemin_choice = True
-            st.markdown("Choix automatique activé")
-    
+
+        if regress_method in ["Polynomial","Laguerre","Legendre","Chebyshev","Hermite"]:
+            poly_degree = st.number_input("Entrez le degré du polynôme :", 1, 100, value=2, step=1)
+            
 
     st.divider()
 
@@ -270,54 +264,52 @@ with tab1:
 
 
 # ###########################################################################
-# ################## Onglet 3 : Arbre Trinomial Display #####################
+# ################## Onglet 3 : Graphique Display #####################
 # ###########################################################################  
 
+graph = LSMGraph(option=option, market=donnee_marche)
 
 with tab3 : 
-    st.subheader("Arbre Trinomiale")
-    graph_arbre_boutton = st.button('Graph arbre')
-    if graph_arbre_boutton : 
-        if nb_pas <= 50 : 
-            with st.spinner("Graphique en cours de réalisation..."):
-                graph = ArbreGraph(arbre=arbre).afficher_arbre()
-                st.plotly_chart(graph, use_container_width=True)
-        else : 
-            st.markdown("Les arbres avec un trop gros nombre de pas deviennent illisibles. Veuillez saisir un plus petit nombre de pas.")
+    st.subheader("Brownien - Sous Jacent")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        graph_boutton = st.button('Obtenir les mouvements browniens')
+
+    with col3:
+        graph_boutton_spot = st.button('Obtenir les trajectoires de prix sous-jacent')
+
+    if graph_boutton : 
+        with st.spinner("Graphique en cours de réalisation..."):
+            graph_b = graph.afficher_mouvements_browniens(brownian,nb_trajectoires=nb_chemin)
+            st.plotly_chart(graph_b, use_container_width=True)
+    if graph_boutton_spot : 
+        with st.spinner("Graphique en cours de réalisation..."):
+            trajectoire = pricer.Price(market=donnee_marche, brownian=brownian)
+            graph_spot = graph.afficher_trajectoires_prix(trajectoire,brownian,nb_trajectoires=nb_chemin)
+            st.plotly_chart(graph_spot, use_container_width=True)
         
+
 # ###########################################################################
 # ########################### Onglet 4 : Grecques ###########################
 # ########################################################################### 
 
 with tab4 : 
     
-    with st.expander('Paramètres grecques empiriques') : 
-        st.markdown('Valeurs utilisées lors du calcul de la différence centrée finie :')
-        cols = st.columns(4)
-        with cols[0] :
-            var_s = st.number_input('Variation prix sous-jacent (% spot):', 0.001, 1.0, 0.01, 0.01)
-        with cols[1] :
-            var_v = st.number_input('Variation de la volatilité (pts %)', 0.001, 1.0, 0.01, 0.01)
-        with cols[2] :
-            var_t = st.number_input('Variation du temps à maturité (nb jour)', 1, 10, 1, 1)
-        with cols[3] :
-            var_r = st.number_input('''Varitation du taux d'intérêt (pts %)''', 0.001, 1.0, 0.01, 0.01)
-        
     if arbre.prix_option is not None : 
 
         st.subheader("Grecques empiriques via la méthode LSM: ")
         
-        # option_deriv = OptionDerivatives(optionC, market, pricer)  
-        # print("Prix :", option_deriv.price(option_deriv.parameters))
-        # print("Delta :", option_deriv.delta())
-        grecques_empiriques = GrecquesEmpiriques(arbre, var_s=var_s, var_v=var_v, var_t=var_t, var_r=var_r)
+        option_deriv = OptionDerivatives(option, donnee_marche, pricer)  
         
         with st.spinner('''Calcul des grecques en cours...''') :
-            delta = round(grecques_empiriques.approxime_delta(),2)
-            gamma = round(grecques_empiriques.approxime_gamma(),2)
-            vega = round(grecques_empiriques.approxime_vega(),2)
-            theta = round(grecques_empiriques.approxime_theta(),2)
-            rho = round(grecques_empiriques.approxime_rho(),2)
+            delta = round(option_deriv.delta(brownian),2)
+            gamma = round(option_deriv.gamma(brownian),2)
+            vega = round(option_deriv.vega(brownian)/100,2)
+            vomma = round(option_deriv.vomma(brownian)/100,2)
+            # theta = round(option_deriv.theta(brownian)/100,2)
+            rho = round(option_deriv.rho(brownian)/100,2)
+            
         
         col11, col12, col13, col14, col15 = st.columns(5)
 
@@ -328,14 +320,16 @@ with tab4 :
         with col13 : 
             st.metric(label='Vega',value=vega, delta=None)
         with col14 : 
-            st.metric(label='Theta',value=theta, delta=None)
+            st.metric(label='Vomma',value=vomma, delta=None)
         with col15 : 
             st.metric(label='Rho',value=rho, delta=None)
         
+        st.divider()
+
         st.subheader("Grecques empiriques via l'arbre Trinomial: ")
                     
-        grecques_empiriques = GrecquesEmpiriques(arbre, var_s=var_s, var_v=var_v, var_t=var_t, var_r=var_r)
-        
+        grecques_empiriques = GrecquesEmpiriques(arbre, var_s=0.01, var_v=0.01, var_t=1, var_r=0.01)
+                
         with st.spinner('''Calcul des grecques en cours...''') :
             delta = round(grecques_empiriques.approxime_delta(),2)
             gamma = round(grecques_empiriques.approxime_gamma(),2)
@@ -357,7 +351,7 @@ with tab4 :
             st.metric(label='Rho',value=rho, delta=None)
             
     else : 
-        st.markdown("Veuillez valoriser l'option via son arbre avant de pouvoir accéder à ses grecques calculée via différence finie centrée.")
+        st.markdown("Veuillez valoriser l'option via son arbre avant de pouvoir accéder à ses grecques calculée via avec l'arbre trinomial et la méthode LSM.")
 
     
     if bs_check : 
@@ -386,157 +380,184 @@ with tab4 :
             st.metric(label='Rho',value=bs_rho, delta=None)
             
         
-    
 # ###########################################################################
-# ################## Onglet 4 : Black-Scholes Comparaison ###################
+# ####################### Onglet 4 : Comparaison ############################
 # ###########################################################################  
 
-with tab5 :
-    max_cpu = st.number_input('''Veuillez choisir le nombre de coeur qui sera mis à contribution pour le multiprocessing (choisir 1 revient à ne pas en faire, monter trop haut peut induire de l'instabilité.):''',1,os.cpu_count(),4,1,key='bs')
-    bs_comparison_button = st.button('''Lancer l'analyse comparative (l'opération prend environ 3min)''')
-    
-    if bs_comparison_button: 
-        now = time.time()
-        
-        @st.cache_resource
-        def call_bs_comparison() : 
-            bs_step_list = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 
-                        200, 220, 240, 260, 280, 300, 320, 340, 
-                        360, 380, 400, 450, 500, 550, 600, 700, 
-                        800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1750, 2000, 2500, 3000, 4000, 5000]
-            bs_epsilon_values = [1e-10]
-            return BsComparison(max_cpu,bs_step_list, bs_epsilon_values)
-        
-        bs_comparison = call_bs_comparison()    
+with tabcomparaison: 
+    tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14 = st.tabs([ "Comparaison Vectoriel vs Scalaire", 
+                                                                                "Comparaison Seed", "Comparaison Nombre de pas", 
+                                                                                "Comparaison temps d'execution - nombre de chemin", 
+                                                                                "Comparaison Polynôme", "Comparaison Degré polynôme", 
+                                                                                "Comparaison Strike","Comparaison Volatilité", "Comparaison Taux d'intérêt"])
 
-        st.markdown(f'Résultats après {round(time.time()-now,2)} secondes.')
-        
-        st.plotly_chart(bs_comparison.bs_graph_temps_pas())
-        st.plotly_chart(bs_comparison.bs_graph_prix_pas())
-        
-        with st.expander(label='Données'): 
-            st.markdown('''Pour un Call Européen: avec un prix de départ du sous jacent à 100, un strike à 101, une volatilité à 20% et un taux d'intérêt à 2%, une date de pricing au 13/01/2024 et une maturité au 23/10/2024, un seuil d'élagage fixé à 1e-10, on obtient le tableau suivant en fonction du nombre de pas.''')
-            st.metric("Prix B&S", round(bs_comparison.bs_price,4))    
-            st.dataframe(bs_comparison.results_df)
-    
-# ###########################################################################
-# ################## Onglet 5 : Epsilon Comparaison #########################
-# ###########################################################################      
-    
-with tab6 :
-    max_cpu = st.number_input('''Veuillez choisir le nombre de coeur qui sera mis à contribution pour le multiprocessing (choisir 1 revient à ne pas en faire, monter trop haut peut induire de l'instabilité.):''',1,os.cpu_count(),4,1,key='epsilon')
-    epsilon_comparison_button = st.button('''Lancer l'analyse comparative (l'opération prend environ 5min)''')
-    
-    if epsilon_comparison_button: 
-        now=time.time()
-        @st.cache_resource
-        def call_epsilon_comparison() : 
-            step_list = [50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 
-                        200, 220, 240, 260, 280, 300, 320, 340, 
-                        360, 380, 400, 450, 500, 550, 600, 700, 
-                        800, 900, 1000, 1200, 1500, 2000, 3000, 5000]
-            epsilon_values = []
-            for i in range(3,13,1):
-                epsilon_values.append(10**(-i))
-            return BsComparison(max_cpu, step_list, epsilon_values)
-        
-        st.subheader('Différences de convergence selon le niveau choisi pour le pruning')
-        
-        epsilon_comparison = call_epsilon_comparison()    
 
-        st.markdown(f'Résultats après {round(time.time()-now,2)} secondes.')
+    # ###########################################################################
+    # #################### Onglet : Vectoriel vs Scalaire #######################
+    # ########################################################################### 
+
+    with tab6 :
+
+        vectoriel_scalaire_comparison_button = st.button('''Lancer l'analyse comparative''')
         
-        st.markdown('''Nous atteignons une convergence à partir d'un seuil de pruning inférieur à 1e-8. En le diminuant, on atteind un prix plus précis au détriment de temps de calcul.''')                        
-        st.plotly_chart(epsilon_comparison.epsilon_graph_prix_pas_bas_epsilon())    
+        if vectoriel_scalaire_comparison_button: 
+            with st.spinner("Graphique en cours de réalisation..."):
+                now = time.time()
+                graph_vs = graph.comparer_methodes()
+                st.markdown(f'Résultats après {round(time.time()-now,2)} secondes.')
+                st.plotly_chart(graph_vs, use_container_width=True)
+
+    # ###########################################################################
+    # #################### Onglet : Comparaison Seed ############################
+    # ########################################################################### 
+
+    with tab7 :
+        seed_comparison_button = st.button('''Lancer l'analyse comparative selon la seed''')
+        
+        if seed_comparison_button: 
+            with st.spinner("Graphique en cours de réalisation..."):
+                now = time.time()
+                graph_seed = graph.comparer_seeds()
+                st.markdown(f'Résultats après {round(time.time()-now,2)} secondes.')
+                st.plotly_chart(graph_seed, use_container_width=True)
+            
+    
+    # ###########################################################################
+    # #################### Onglet : Nombre de pas ###############################
+    # ########################################################################### 
+
+    with tab8 :
+        nb_pas_comparison_button = st.button('''Lancer l'analyse pour le nombre de pas''')
+        
+        if nb_pas_comparison_button: 
+            with st.spinner("Graphique en cours de réalisation..."):
+                now = time.time()
+                graph_nb_pas = graph.comparer_steps()
+                st.markdown(f'Résultats après {round(time.time()-now,2)} secondes.')
+                st.plotly_chart(graph_nb_pas, use_container_width=True)
+    
+    # ###########################################################################
+    # ######################## Onglet : Nombre de chemin ########################
+    # ########################################################################### 
+
+    with tab9 :
+        path_comparison_button = st.button('''Lancer l'analyse comparative selon le nombre de chemin''')
+        
+        if path_comparison_button: 
+            with st.spinner("Graphique en cours de réalisation..."):
+                now = time.time()
+                graph_path = graph.comparer_convergence_paths()
+                st.markdown(f'Résultats après {round(time.time()-now,2)} secondes.')
+                st.plotly_chart(graph_path, use_container_width=True)
+            
+    # ###########################################################################
+    # #################### Onglet : Comparaison Polynôme ########################
+    # ########################################################################### 
+
+    with tab10 :
+        poly_comparison_button = st.button('''Lancer l'analyse comparative selon le polynôme''')
+        
+        if poly_comparison_button: 
+            with st.spinner("Graphique en cours de réalisation..."):
+                now = time.time()
+                graph_poly, df_results = graph.comparer_polynomes()
+                st.markdown(f'Résultats après {round(time.time()-now,2)} secondes.')
+                st.plotly_chart(graph_poly, use_container_width=True)
+                # st.dataframe(df_results)
+
+    # ###########################################################################
+    # #################### Onglet : Comparaison Degré ###########################
+    # ########################################################################### 
+
+    with tab11 :
+        degree_comparison_button = st.button('''Lancer l'analyse comparative selon le degré des polynômes''')
+        
+        if degree_comparison_button:
+
+            st.subheader('''Prix LSM selon le niveau de degré des polynômes''')
+
+            with st.spinner("Graphique en cours de réalisation..."):
+                now = time.time()
+                graph_degree, df_results = graph.comparer_degres_par_type()
+                st.markdown(f'Résultats après {round(time.time()-now,2)} secondes.')
+                st.plotly_chart(graph_degree, use_container_width=True)
+                # st.dataframe(df_results)
+
+
+    # ###########################################################################
+    # ##################### Onglet : Strike Comparaison #########################
+    # ###########################################################################
+
+    with tab12 : 
+        max_cpu = st.number_input('''Veuillez choisir le nombre de coeur qui sera mis à contribution pour le multiprocessing (choisir 1 revient à ne pas en faire, monter trop haut peut induire de l'instabilité.):''',1,os.cpu_count(),4,1,key='strike')
+        strike_comparison_button = st.button('''Lancer l'analyse comparative (l'opération prend environ 2min)''')
+        
+        if strike_comparison_button:
+            now = time.time()
+            # @st.cache_resource
+            def call_strike_comparison() :
+                step_list=[20]
+                strike_list = np.arange(spot-10, spot+10, 0.5)
+                return StrikeComparison(max_cpu, step_list, strike_list, donnee_marche, brownian, option)
+            
+            st.subheader('''Différence d'écart selon le niveau de strike''')
+
+            strike_comparison = call_strike_comparison()
+
+            st.markdown(f'Résultats après {round(time.time()-now,2)} secondes.')
+            st.plotly_chart(strike_comparison.graph_strike_comparison())
+            
+            with st.expander(label='Données'): 
+                st.markdown(f'''Pour une option {option_type} de type {option_exercice}: avec un prix de départ du sous jacent à {spot}, une volatilité à {volatite} et un taux d'intérêt à {risk_free_rate}, une date de pricing au {date_pricing} et une maturité au {maturite}, on obtient le tableau suivant en fonction du strike.''')
+                st.dataframe(strike_comparison.results_df.sort_values(by='Strike',ascending=True))
+
+    # ###########################################################################
+    # ################## Onglet 7 : Volatilité Comparaison ######################
+    # ###########################################################################
+
+    with tab13 : 
+        max_cpu = st.number_input('''Veuillez choisir le nombre de coeur qui sera mis à contribution pour le multiprocessing (choisir 1 revient à ne pas en faire, monter trop haut peut induire de l'instabilité.):''',1,os.cpu_count(),4,1,key='vol')
+        vol_comparison_button = st.button('''Lancer l'analyse comparative (l'opération prend environ 1.5min)''')
+        
+        if vol_comparison_button :
+            now = time.time()
+            # @st.cache_resource
+            def call_vol_comparison():
+                step_list=[20]
+                vol_list=np.arange(0.01,1,0.01)
+                return VolComparison(max_cpu,step_list, vol_list, donnee_marche, brownian, option)
+            
+            vol_comparison = call_vol_comparison()
+            
+            st.markdown(f'Résultats après {round(time.time()-now,2)} secondes.')
+            st.plotly_chart(vol_comparison.graph_vol())
+            
+            with st.expander(label='Données'): 
+                st.markdown(f'''Pour une option {option_type} de type {option_exercice}: avec un prix de départ du sous jacent à {spot}, une strike à {strike} et un taux d'intérêt à {risk_free_rate}, une date de pricing au {date_pricing} et une maturité au {maturite}, on obtient le tableau suivant en fonction de la voltatilité.''')
+                st.dataframe(vol_comparison.results_df.sort_values(by='Volatilité',ascending=True))
                 
-        st.markdown("Dans le cas d'un seuil de pruning qui ne serait pas assez permissif, i.e. d'une valeur trop grande, on voit bien que l'on perd la propriété de convergence vers B&S.")
-        st.plotly_chart(epsilon_comparison.epsilon_graph_prix_pas_haut_epsilon())
-        
-        with st.expander(label='Données graphiques 1 et 2'): 
-            st.markdown('''Pour un Call Européen: avec un prix de départ du sous jacent à 100, un strike à 101, une volatilité à 20% et un taux d'intérêt à 2%, une date de pricing au 13/01/2024 et une maturité au 23/10/2024, on obtient le tableau suivant en fonction du nombre de pas et ce pour différents seuil d'élagage.''')
-            st.metric("Prix B&S", round(epsilon_comparison.bs_price,4))    
-            st.dataframe(epsilon_comparison.results_df)
-        
-        st.divider()
-        
-        st.subheader('''Temps nécessaire au pricing d'un arbre de 5000 pas selon le niveau de pruning choisi''')
-        
-        st.markdown("Ce graphique nous permet de nous rendre compte de l'effet de la variation d'epsilon sur le temps de pricing d'un arbre à 5000 pas. (L'effet en cloche semble dû à notre choix d'effectuer ces calculs en parallèle, les dernières valeur d'epsilon sont celles qui arrivent à la fin de la queue de calcul et donc pour lesquelles on a davantage de puissance de calcul.)")
-        st.plotly_chart(epsilon_comparison.epsilon_vs_temps_pricing_graph())
+    # ###########################################################################
+    # ################## Onglet 7 : Intérêt Comparaison ######################
+    # ###########################################################################
 
-# ###########################################################################
-# ################## Onglet 6 : Strike Comparaison #########################
-# ###########################################################################
-
-with tab7 : 
-    max_cpu = st.number_input('''Veuillez choisir le nombre de coeur qui sera mis à contribution pour le multiprocessing (choisir 1 revient à ne pas en faire, monter trop haut peut induire de l'instabilité.):''',1,os.cpu_count(),4,1,key='strike')
-    strike_comparison_button = st.button('''Lancer l'analyse comparative (l'opération prend environ 2min)''')
-    
-    if strike_comparison_button:
-        now = time.time()
-        @st.cache_resource
-        def call_strike_comparison() :
-            step_list=[300]
-            strike_list = np.arange(100, 110.1, 0.1)
-            return StrikeComparison(max_cpu,step_list,strike_list)
+    with tab14 : 
+        max_cpu = st.number_input('''Veuillez choisir le nombre de coeur qui sera mis à contribution pour le multiprocessing (choisir 1 revient à ne pas en faire, monter trop haut peut induire de l'instabilité.):''',1,os.cpu_count(),4,1,key='rate')
+        rate_comparison_button = st.button('''Lancer l'analyse comparative (l'opération prend environ 2 min)''')
         
-        st.subheader('''Différence d'écart selon le niveau de strike''')
-        
-        strike_comparison = call_strike_comparison()
-
-        st.markdown(f'Résultats après {round(time.time()-now,2)} secondes.')
-        st.plotly_chart(strike_comparison.graph_strike_temps_pas())
-        
-        with st.expander(label='Données'): 
-            st.markdown('''Pour un Call Européen: avec un prix de départ du sous jacent à 100, une volatilité à 20% et un taux d'intérêt à 2%, une date de pricing au 13/01/2024, une maturité au 23/10/2024, un niveau d'élagage à 1e-10 et des arbres de 300 pas, on obtient le tableau suivant en fonction du strike.''')
-            st.dataframe(strike_comparison.results_df.sort_values(by='Strike',ascending=True))
+        if rate_comparison_button :
+            now = time.time()
+            @st.cache_resource
+            def call_rate_comparison():
+                step_list=[20]
+                rate_list=np.arange(-5,5,0.1)
+                return RateComparison(max_cpu, step_list, rate_list, donnee_marche, brownian, option)
             
-# ###########################################################################
-# ################## Onglet 7 : Volatilité Comparaison ######################
-# ###########################################################################
-
-with tab8 : 
-    max_cpu = st.number_input('''Veuillez choisir le nombre de coeur qui sera mis à contribution pour le multiprocessing (choisir 1 revient à ne pas en faire, monter trop haut peut induire de l'instabilité.):''',1,os.cpu_count(),4,1,key='vol')
-    vol_comparison_button = st.button('''Lancer l'analyse comparative (l'opération prend environ 1.5min)''')
-    
-    if vol_comparison_button :
-        now = time.time()
-        @st.cache_resource
-        def call_vol_comparison():
-            step_list=[300]
-            vol_list=np.arange(0.01,1.0,0.01)
-            return VolComparison(max_cpu,step_list, vol_list)
-        
-        vol_comparison = call_vol_comparison()
-        
-        st.markdown(f'Résultats après {round(time.time()-now,2)} secondes.')
-        st.plotly_chart(vol_comparison.graph_vol_temps_pas())
-        
-        with st.expander(label='Données'): 
-            st.markdown('''Pour un Call Européen: avec un prix de départ du sous jacent à 100, un strike à 101, un taux d'intérêt à 2%, une date de pricing au 13/01/2024, une maturité au 23/10/2024, un niveau d'élagage à 1e-10 et des arbres de 300 pas, on obtient le tableau suivant en fonction de la voltatilité.''')
-            st.dataframe(vol_comparison.results_df.sort_values(by='Volatilité',ascending=True))
+            rate_comparison = call_rate_comparison()
             
-# ###########################################################################
-# ################## Onglet 7 : Intérêt Comparaison ######################
-# ###########################################################################
+            st.markdown(f'Résultats après {round(time.time()-now,2)} secondes.')
+            st.plotly_chart(rate_comparison.graph_rate())
+            
+            with st.expander(label='Données'): 
+                st.markdown('''Pour un Call Européen: avec un prix de départ du sous jacent à 100, un strike à 101, une volatilité à 20%, une date de pricing au 13/01/2024, une maturité au 23/10/2024, un niveau d'élagage à 1e-10 et des arbres de 300 pas, on obtient le tableau suivant en fonction du niveau de taux d'intérêt.''')
+                st.dataframe(rate_comparison.results_df.sort_values(by='Taux',ascending=True))
 
-with tab9 : 
-    max_cpu = st.number_input('''Veuillez choisir le nombre de coeur qui sera mis à contribution pour le multiprocessing (choisir 1 revient à ne pas en faire, monter trop haut peut induire de l'instabilité.):''',1,os.cpu_count(),4,1,key='rate')
-    rate_comparison_button = st.button('''Lancer l'analyse comparative (l'opération prend environ 2 min)''')
-    
-    if rate_comparison_button :
-        now = time.time()
-        @st.cache_resource
-        def call_rate_comparison():
-            step_list=[100]
-            rate_list=np.arange(-0.5,0.5,0.005)
-            return RateComparison(max_cpu, step_list, rate_list)
-        
-        rate_comparison = call_rate_comparison()
-        
-        st.markdown(f'Résultats après {round(time.time()-now,2)} secondes.')
-        st.plotly_chart(rate_comparison.graph_rate_temps_pas())
-        
-        with st.expander(label='Données'): 
-            st.markdown('''Pour un Call Européen: avec un prix de départ du sous jacent à 100, un strike à 101, une volatilité à 20%, une date de pricing au 13/01/2024, une maturité au 23/10/2024, un niveau d'élagage à 1e-10 et des arbres de 300 pas, on obtient le tableau suivant en fonction du niveau de taux d'intérêt.''')
-            st.dataframe(rate_comparison.results_df.sort_values(by='''Taux d'intérêt''',ascending=True))
