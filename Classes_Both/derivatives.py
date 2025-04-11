@@ -183,6 +183,10 @@ class OptionDerivatives:
     def theta(self, brownian: Brownian)-> float:
         return -OneDimDerivative(self.price, self.parameters, shift=1/365, brownian=brownian).first("maturity")
     
+    # Calcul du rho : sensibilité au taux d'intérêt
+    def rho(self, brownian: Brownian)-> float:
+        return OneDimDerivative(self.price, self.parameters, shift=0.01, brownian=brownian).first("r")
+    
     # Calcul du gamma : dérivée seconde par rapport au prix
     def gamma(self, brownian: Brownian)-> float:
         return TwoDimDerivatives(self.price, self.parameters, brownian=brownian).second("price", "price")
