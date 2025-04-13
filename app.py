@@ -549,7 +549,7 @@ with tabcomparaison:
             @st.cache_resource
             def call_rate_comparison():
                 step_list=[20]
-                rate_list=np.arange(-5,5,0.1)
+                rate_list=np.arange(-0.5,0.5,0.01)
                 return RateComparison(max_cpu, step_list, rate_list, donnee_marche, brownian, option)
             
             rate_comparison = call_rate_comparison()
@@ -558,6 +558,6 @@ with tabcomparaison:
             st.plotly_chart(rate_comparison.graph_rate())
             
             with st.expander(label='Données'): 
-                st.markdown('''Pour un Call Européen: avec un prix de départ du sous jacent à 100, un strike à 101, une volatilité à 20%, une date de pricing au 13/01/2024, une maturité au 23/10/2024, un niveau d'élagage à 1e-10 et des arbres de 300 pas, on obtient le tableau suivant en fonction du niveau de taux d'intérêt.''')
-                st.dataframe(rate_comparison.results_df.sort_values(by='Taux',ascending=True))
+                st.markdown(f'''Pour une option {option_type} de type {option_exercice}: avec un prix de départ du sous jacent à {spot}, une strike à {strike} et une volatilité à {volatite}, une date de pricing au {date_pricing} et une maturité au {maturite}, on obtient le tableau suivant en fonction du taux d'intérêt.''')
+                st.dataframe(rate_comparison.results_df.sort_values(by='Taux d\'intérêt',ascending=True))
 
