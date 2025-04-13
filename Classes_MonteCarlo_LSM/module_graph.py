@@ -170,7 +170,7 @@ class LSMGraph:
         
         return fig
 
-    def comparer_methodes(self, methods=None, nb_paths=1000, nb_steps=200):
+    def comparer_methodes(self, methods=None, nb_paths=1000, nb_steps=200, seed=42):
         """
         Compare différentes méthodes de calcul du prix d'une option.
         
@@ -191,7 +191,7 @@ class LSMGraph:
 
         for method in methods:
             pricer = LSM_method(self.option)
-            brownian = Brownian(self.period, nb_steps, nb_paths, 1)
+            brownian = Brownian(self.period, nb_steps, nb_paths, seed)
             start_time = time.time()
             price, std_error, interval = pricer.LSM(brownian, self.market, method=method)
             end_time = time.time()
@@ -484,7 +484,7 @@ class LSMGraph:
 
         return fig
 
-    def comparer_seeds(self, nb_seeds=20, nb_paths=10000, nb_steps=20):
+    def comparer_seeds(self, nb_seeds=100, nb_paths=10000, nb_steps=20):
         """
         Compare les résultats pour différentes valeurs de seed.
         
